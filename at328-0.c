@@ -43,25 +43,12 @@ void serial_stringout(char *s)
     }
 }
 
-
-int main(void)
+/*
+    Lab 3/4: Echo characters typed in terminal back to user -- used for debugging purposes
+*/
+void debug_echoing()
 {
-    // Voltage Level Test
-    unsigned short ubrr = ( ( 7372800 / 16 ) / 9600) - 1; 
-    serial_init(ubrr); 
-
-    _delay_ms(100);
-
-
-    // Heartbeat sensor code
-    adc_init();
-    int threshold = 550;
-    int heart_signal;
-
-
-
-    while (1) {
-        /*
+    while(1) {
         char in = serial_in(); 
 
         char buf[30];
@@ -72,7 +59,24 @@ int main(void)
             snprintf(buf, 30, "You entered the consonant '%c'\n", in);
             serial_stringout(buf);
         }
-        */
+    }
+}
+
+
+int main(void)
+{
+    // Voltage Level Test
+    unsigned short ubrr = ( ( 7372800 / 16 ) / 9600) - 1; 
+    serial_init(ubrr); 
+
+    _delay_ms(100);
+
+    // Heartbeat sensor code
+    adc_init();
+    int threshold = 550;
+    int heart_signal;
+
+    while (1) {
         char buf[30];
         heart_signal = adc_sample(3);
         if(heart_signal > threshold){                          
@@ -83,8 +87,10 @@ int main(void)
             serial_stringout(buf);                  
         }
 
+        _delay_ms(1500);
 
     }
 
     return 0;   /* never reached */
 }
+
