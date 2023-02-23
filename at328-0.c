@@ -2,6 +2,8 @@
 #include <util/delay.h>
 #include <stdio.h>
 
+#include "adc.h"
+
 /*
     serial_init - Initialize the USART port
 */
@@ -50,7 +52,16 @@ int main(void)
 
     _delay_ms(100);
 
+
+    // Heartbeat sensor code
+    adc_init();
+    int threshold = 550;
+    int heart_signal;
+
+
+
     while (1) {
+        /*
         char in = serial_in(); 
 
         char buf[30];
@@ -61,6 +72,18 @@ int main(void)
             snprintf(buf, 30, "You entered the consonant '%c'\n", in);
             serial_stringout(buf);
         }
+        */
+        char buf[30];
+        heart_signal = adc_sample(3);
+        if(heart_signal > threshold){                          
+            snprintf(buf, 30, "over threshold '%2d'\n", heart_signal);
+            serial_stringout(buf);         
+        } else {
+            snprintf(buf, 30, "under threshold '%2d'\n", heart_signal);
+            serial_stringout(buf);                  
+        }
+
+
     }
 
     return 0;   /* never reached */
