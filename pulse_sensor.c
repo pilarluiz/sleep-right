@@ -20,8 +20,8 @@ void pulse_sensor_init(void) {
     T = 512;                    // trough at 1/2 the input range.
     thresh = threshSetting;     // reset the thresh variable with user defined THRESHOLD
     amp = 100;                  // beat amplitude 1/10 of input range.
-    firstBeat = 1;           // looking for the first beat
-    secondBeat = 0;         // not yet looking for the second beat in a row
+    firstBeat = 1;              // looking for the first beat
+    secondBeat = 0;             // not yet looking for the second beat in a row
     FadeLevel = 0;              // LED is dark.
 }
 
@@ -35,8 +35,8 @@ void process_latest_sample(void) {
     // Serial.println(threshSetting);
     // Serial.print('\t');
     // Serial.println(thresh);
-    sampleCounter += sampleIntervalMs;         // keep track of the time in mS with this variable
-    N = sampleCounter - lastBeatTime;          // monitor the time since the last beat to avoid noise
+    sampleCounter += sampleIntervalMs;              // keep track of the time in mS with this variable
+    N = sampleCounter - lastBeatTime;               // monitor the time since the last beat to avoid noise
 
     //  find the peak and trough of the pulse wave
     if (Signal < thresh && N > (IBI / 5) * 3) {     // avoid dichrotic noise by waiting 3/5 of last IBI
@@ -45,9 +45,9 @@ void process_latest_sample(void) {
         }
     }
 
-    if (Signal > thresh && Signal > P) {       // thresh condition helps avoid noise
-        P = Signal;                            // P is the peak
-    }                                          // keep track of highest point in pulse wave
+    if (Signal > thresh && Signal > P) {            // thresh condition helps avoid noise
+        P = Signal;                                 // P is the peak
+    }                                               // keep track of highest point in pulse wave
 
     //  NOW IT'S TIME TO LOOK FOR THE HEART BEAT
     // signal surges up in value every time there is a pulse
@@ -89,20 +89,20 @@ void process_latest_sample(void) {
     }
 
     if (Signal < thresh && Pulse == 1) {  // when the values are going down, the beat is over
-        Pulse = 0;                         // reset the Pulse flag so we can do it again
-        amp = P - T;                           // get amplitude of the pulse wave
-        thresh = amp / 2 + T;                  // set thresh at 50% of the amplitude
-        P = thresh;                            // reset these for next time
+        Pulse = 0;                                  // reset the Pulse flag so we can do it again
+        amp = P - T;                                // get amplitude of the pulse wave
+        thresh = amp / 2 + T;                       // set thresh at 50% of the amplitude
+        P = thresh;                                 // reset these for next time
         T = thresh;
     }
 
-    if (N > 2500) {                             // if 2.5 seconds go by without a beat
-        thresh = threshSetting;                 // set thresh default
-        P = 512;                                // set P default
-        T = 512;                                // set T default
-        lastBeatTime = sampleCounter;           // bring the lastBeatTime up to date
-        firstBeat = 1;                          // set these to avoid noise
-        secondBeat = 0;                         // when we get the heartbeat back
+    if (N > 2500) {                                 // if 2.5 seconds go by without a beat
+        thresh = threshSetting;                     // set thresh default
+        P = 512;                                    // set P default
+        T = 512;                                    // set T default
+        lastBeatTime = sampleCounter;               // bring the lastBeatTime up to date
+        firstBeat = 1;                              // set these to avoid noise
+        secondBeat = 0;                             // when we get the heartbeat back
         QS = 0;
         BPM = 0;
         IBI = 600;                  // 600ms per beat = 100 Beats Per Minute (BPM)
