@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "adc.h"
+#include "pulse_sensor.h"
 
 /*
     serial_init - Initialize the USART port
@@ -53,10 +54,10 @@ void debug_echoing()
 
         char buf[30];
         if ((in == 'a') || (in == 'e') || (in == 'i') || (in == 'o') || (in == 'u') || (in == 'y')) {
-            snprintf(buf, 30, "You entered the vowel '%c'\n", in);
+            snprintf(buf, 31, "You entered the vowel '%c'\n", in);
             serial_stringout(buf);
         } else {
-            snprintf(buf, 30, "You entered the consonant '%c'\n", in);
+            snprintf(buf, 31, "You entered the consonant '%c'\n", in);
             serial_stringout(buf);
         }
     }
@@ -80,10 +81,10 @@ int main(void)
         char buf[30];
         heart_signal = adc_sample(3);
         if(heart_signal > threshold){                          
-            snprintf(buf, 30, "over threshold '%2d'\n", heart_signal);
+            snprintf(buf, 31, "over threshold '%2d'\n", heart_signal);
             serial_stringout(buf);         
         } else {
-            snprintf(buf, 30, "under threshold '%2d'\n", heart_signal);
+            snprintf(buf, 31, "under threshold '%2d'\n", heart_signal);
             serial_stringout(buf);                  
         }
 
