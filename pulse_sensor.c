@@ -1,10 +1,14 @@
 #include <stdio.h>
 
 #include "adc.h"
+#include "serial.h"
 #include "pulse_sensor.h"
 
 #define PULSE_PIN 3
 
+/*
+    Initialize variables
+*/
 void pulse_sensor_init(void) {
     for(int i = 0; i < 10; ++i) {
         rate[i] = 0;
@@ -25,12 +29,31 @@ void pulse_sensor_init(void) {
     FadeLevel = 0;              // LED is dark.
 }
 
+/*
+    Function to get adc sample, process it, and return the BPM. 
+*/
+int get_pulse_reading(void) {
+    read_next_sample();
+    process_latest_sample();
+    return BPM;
+}
 
+/*
+    Take ADC sample on pulse sensor
+*/
 void read_next_sample(void) {
     // We assume assigning to an int is atomic.
     Signal = adc_sample(PULSE_PIN);
+
+    // -- DEBUGGING --
+    char buf[30];
+    snprintf(buf, 31, "ADC Signal Read: '%2d'\n", Signal);
+    serial_stringout(buf);      
 }
 
+/*
+    Process sample for noise and other factors
+*/
 void process_latest_sample(void) {
     // Serial.println(threshSetting);
     // Serial.print('\t');

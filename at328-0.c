@@ -4,45 +4,7 @@
 
 #include "adc.h"
 #include "pulse_sensor.h"
-
-/*
-    serial_init - Initialize the USART port
-*/
-void serial_init ( unsigned short ubrr ) {
-    UBRR0 = ubrr ; // Set baud rate
-    UCSR0B |= (1 << TXEN0 ); // Turn on transmitter
-    UCSR0B |= (1 << RXEN0 ); // Turn on receiver
-    UCSR0C = (3 << UCSZ00 ); // Set for async . operation , no parity, one stop bit , 8 data bits
-}
-
-/*
-    serial_out - Output a byte to the USART0 port
-*/
-void serial_out ( char ch )
-{
-    while (( UCSR0A & (1 << UDRE0 )) == 0);
-    UDR0 = ch;
-}
-
-/*
-    serial_in - Read a byte from the USART0 and return it
-*/
-char serial_in ()
-{
-    while ( !( UCSR0A & (1 << RXC0 )) );
-    return UDR0;
-}
-
-/*
-    wrapper to send array of chars
-*/
-void serial_stringout(char *s) 
-{
-    int i = 0; 
-    while(s[i] != '\0') {
-        serial_out(s[i++]);
-    }
-}
+#include "serial.h"
 
 /*
     Lab 3/4: Echo characters typed in terminal back to user -- used for debugging purposes
@@ -72,24 +34,18 @@ int main(void)
 
     _delay_ms(100);
 
-    // Heartbeat sensor code
+    // Initialize ADC and Pulse Sensor 
     adc_init();
-    int threshold = 550;
-    int heart_signal;
+    pulse_sensor_init();
 
     while (1) {
+        int bpm = get_pulse_reading();
         char buf[30];
-        heart_signal = adc_sample(3);
-        if(heart_signal > threshold){                          
-            snprintf(buf, 31, "over threshold '%2d'\n", heart_signal);
-            serial_stringout(buf);         
-        } else {
-            snprintf(buf, 31, "under threshold '%2d'\n", heart_signal);
-            serial_stringout(buf);                  
-        }
+
+        snprintf(buf, 31, "BPM: '%2d'\n", bpm);
+        serial_stringout(buf);      
 
         _delay_ms(1500);
-
     }
 
     return 0;   /* never reached */

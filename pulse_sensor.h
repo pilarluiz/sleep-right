@@ -1,4 +1,5 @@
 void pulse_sensor_init(void);
+int get_pulse_reading(void);
 void read_next_sample(void);
 void process_latest_sample(void);
 
@@ -7,8 +8,8 @@ void process_latest_sample(void);
 volatile int BPM;                // int that holds raw Analog in 0. updated every call to readSensor()
 volatile int Signal;             // holds the latest incoming raw data (0..1023)
 volatile int IBI;                // int that holds the time interval (ms) between beats! Must be seeded!
-volatile int Pulse;          // "True" when User's live heartbeat is detected. "False" when not a "live beat".
-volatile int QS;             // The start of beat has been detected and not read by the Sketch.
+volatile int Pulse;              // "True" when User's live heartbeat is detected. "False" when not a "live beat".
+volatile int QS;                 // The start of beat has been detected and not read by the Sketch.
 volatile int FadeLevel;          // brightness of the FadePin, in scaled PWM units. See FADE_SCALE
 volatile int threshSetting;      // used to seed and reset the thresh variable
 volatile int amp;                         // used to hold amplitude of pulse waveform, seeded (sample value)
