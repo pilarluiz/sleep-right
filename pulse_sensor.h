@@ -2,6 +2,7 @@ void pulse_sensor_init(void);
 int get_pulse_reading(void);
 void read_next_sample(void);
 void process_latest_sample(void);
+int saw_start_of_beat(void);
 
 // Pulse detection output variables.
 // Volatile because our pulse detection code could be called from an Interrupt
@@ -26,3 +27,5 @@ int T;                           // used to find trough in pulse wave, seeded (s
 int thresh;                      // used to find instant moment of heart beat, seeded (sample value)
 int firstBeat;                   // used to seed rate array so we startup with reasonable BPM
 int secondBeat;                  // used to seed rate array so we startup with reasonable BPM
+
+unsigned long sampleIntervalMs;

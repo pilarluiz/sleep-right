@@ -1,10 +1,13 @@
 #include <stdio.h>
+#include <avr/interrupt.h>
 
 #include "adc.h"
 #include "serial.h"
 #include "pulse_sensor.h"
+#include "pulse_interrupt.h"
 
 #define PULSE_PIN 3
+#define DEBUG 1
 
 /*
     Initialize variables
@@ -22,11 +25,13 @@ void pulse_sensor_init(void) {
     lastBeatTime = 0; 
     P = 512;                    // peak at 1/2 the input range of 0..1023
     T = 512;                    // trough at 1/2 the input range.
+    threshSetting = 750;
     thresh = threshSetting;     // reset the thresh variable with user defined THRESHOLD
     amp = 100;                  // beat amplitude 1/10 of input range.
     firstBeat = 1;              // looking for the first beat
     secondBeat = 0;             // not yet looking for the second beat in a row
     FadeLevel = 0;              // LED is dark.
+    sampleIntervalMs = (2 * 1000L) / 1000;
 }
 
 /*
@@ -45,10 +50,11 @@ void read_next_sample(void) {
     // We assume assigning to an int is atomic.
     Signal = adc_sample(PULSE_PIN);
 
-    // -- DEBUGGING --
-    char buf[30];
-    snprintf(buf, 31, "ADC Signal Read: '%2d'\n", Signal);
-    serial_stringout(buf);      
+    // if(DEBUG) {
+    //     char buf[30];
+    //     snprintf(buf, 31, "ADC Signal Read: '%2d'\n", Signal);
+    //     serial_stringout(buf);    
+    // } 
 }
 
 /*
@@ -74,8 +80,23 @@ void process_latest_sample(void) {
 
     //  NOW IT'S TIME TO LOOK FOR THE HEART BEAT
     // signal surges up in value every time there is a pulse
+    // if(DEBUG) {
+    //     char buf[100];
+    //     snprintf(buf, 101, "Looking for heart beat...\n\tN=%d\n\tSignal=%d\n\tPulse=%d\n\tIBI=%d", N, Signal, Pulse, IBI);
+    //     serial_stringout(buf);
+    // }
+
     if (N > 250) {                             // avoid high frequency noise
+        // if(DEBUG) {
+        //     char buf[100];
+        //     snprintf(buf, 101, "Looking for heart beat...\n\tN=%d\n\tSignal=%d\n\tPulse=%d\n\tIBI math=%d", N, Signal, Pulse, (IBI / 5) * 3);
+        //     serial_stringout(buf);
+        // }
+
         if ( (Signal > thresh) && (Pulse == 0) && (N > (IBI / 5) * 3) ) {
+            // if(DEBUG) {
+            //     serial_stringout("IN INNER LOOP");
+            // }
             Pulse = 1;                             // set the Pulse flag when we think there is a pulse
             IBI = sampleCounter - lastBeatTime;    // measure time between beats in mS
             lastBeatTime = sampleCounter;          // keep track of time for next pulse
@@ -132,4 +153,14 @@ void process_latest_sample(void) {
         Pulse = 0;
         amp = 100;                  // beat amplitude 1/10 of input range.
     }
+}
+
+int saw_start_of_beat() {
+    // Disable interrupts to avoid a race with the ISR.
+    DISABLE_PULSE_SENSOR_INTERRUPTS;
+    int started = QS;
+    QS = 0;
+    ENABLE_PULSE_SENSOR_INTERRUPTS;
+
+    return started;
 }

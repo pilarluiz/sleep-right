@@ -5,6 +5,7 @@
 #include "adc.h"
 #include "pulse_sensor.h"
 #include "serial.h"
+#include "pulse_interrupt.h"
 
 /*
     Lab 3/4: Echo characters typed in terminal back to user -- used for debugging purposes
@@ -37,15 +38,16 @@ int main(void)
     // Initialize ADC and Pulse Sensor 
     adc_init();
     pulse_sensor_init();
+    interrupt_init();
 
     while (1) {
-        int bpm = get_pulse_reading();
-        char buf[30];
+        if (saw_start_of_beat()) {
+            char buf[30];
+            snprintf(buf, 31, "BPM: '%2d'\n", BPM);
+            serial_stringout(buf); 
+        }  
 
-        snprintf(buf, 31, "BPM: '%2d'\n", bpm);
-        serial_stringout(buf);      
-
-        _delay_ms(1500);
+        _delay_ms(20);
     }
 
     return 0;   /* never reached */
