@@ -54,36 +54,36 @@ void debug_rtc() {
 
     status = i2c_io(0xD0, &addr, 1, NULL, 0, rbuf, 1);
     if(status == 0) {
-        //serial_stringout("success ");
+        serial_stringout("success ");
     } else {
         char buf[40];
         snprintf(buf, 41, "unsuccessful i2c transfer %2d ", status);
-        //serial_stringout(buf);
+        serial_stringout(buf);
     }
     seconds = rbuf[0] & (0x0F);
     tens = (rbuf[0] & (0x70)) >> 4;
     time = seconds + 10*tens;
     char buf[30];
     snprintf(buf, 31, "Time: %2d, ", time);
-    //serial_stringout(buf);
+    serial_stringout(buf);
 
     _delay_ms(5000);
 
-    //serial_stringout("getting delayed time... ");
+    serial_stringout("getting delayed time... ");
     status_delayed = i2c_io(0xD0, &addr, 1, NULL, 0, rbuf, 1);
     if(status_delayed == 0) {
-        //serial_stringout("success delayed ");
+        serial_stringout("success delayed ");
     } else {
         char buf[40];
         snprintf(buf, 41, "unsuccessful delayed i2c transfer %2d ", status_delayed);
-        //serial_stringout(buf);
+        serial_stringout(buf);
     }
     seconds = rbuf[0] & (0x0F);
     tens = (rbuf[0] & (0x70)) >> 4;
     time = seconds + 10*tens;
     char buf_delay[30];
     snprintf(buf_delay, 31, "Delayed Time: %2d\n", time);
-    //serial_stringout(buf_delay);
+    serial_stringout(buf_delay);
     
    // write test
 
@@ -114,6 +114,7 @@ void debug_rtc() {
 
 uint8_t init_rtc() {
     uint8_t times[4];
+
     // set RTC time to 0
     times[0] = 0x00;
     times[1] = 0x00;
@@ -123,11 +124,11 @@ uint8_t init_rtc() {
     uint8_t write_addr = 0;
     uint8_t status = i2c_io(0xD0, &write_addr, 1, times, 4, NULL, 0);
 
-    if(status != 0) {
-        char buf[40];
-        snprintf(buf, 41, "unsuccessful i2c transfer %2d ", status);
-        serial_stringout(buf);
-    }
+    // if(status != 0) {
+    //     char buf[40];
+    //     snprintf(buf, 41, "unsuccessful i2c transfer %2d ", status);
+    //     serial_stringout(buf);
+    // }
     return status;
 }
 
@@ -151,18 +152,18 @@ int main(void)
 {
     // Voltage Level Test
     unsigned short ubrr = ( ( FOSC / 16 ) / 9600) - 1; 
-    //serial_init(ubrr); 
+    serial_init(ubrr); 
 
     _delay_ms(100);
 
     // Initialize ADC and Pulse Sensor 
-    //adc_init();
-    //pulse_sensor_init();
-    //interrupt_init();
+    adc_init();
+    pulse_sensor_init();
+    interrupt_init();
 
     // RTC init and write time //
     i2c_init(BDIV);
-    _delay_ms(3000);
+    _delay_ms(10000);
     init_rtc();
 
     while (1) {
