@@ -18,9 +18,12 @@ uint8_t seconds_tens;
 uint8_t seconds;
 uint8_t minutes_ones;
 uint8_t minutes_tens;
+uint8_t minutes;
 uint8_t hours_ones;
 uint8_t hours_tens;
-uint8_t day;
+uint8_t hours;
+char* day;
+char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 /*
     Lab 3/4: Echo characters typed in terminal back to user -- used for debugging purposes
@@ -112,7 +115,7 @@ void debug_rtc() {
     
 }
 
-uint8_t init_rtc() {
+uint8_t reset_time() {
     uint8_t times[4];
 
     // set RTC time to 0
@@ -143,7 +146,43 @@ uint8_t rtc_read() {
         return status;
     }
     
+    seconds_ones = rbuf[0] & (0x0F);
+    seconds_tens = (rbuf[0] & (0x70)) >> 4;
+    seconds = seconds_ones + 10*seconds_tens;
+    minutes_ones = rbuf[1] & (0x0F);
+    minutes_tens = (rbuf[1] & (0x70)) >> 4;
+    minutes = minutes_ones + 10*minutes_tens;
+    hours_ones = rbuf[2] & (0x0F);
+    hours_tens = (rbuf[2] & (0x10)) >> 4;
+    hours = hours_ones + 10*hours_tens;
+    day = days[rbuf[3] & (0x07)];
 
+    char buf[40];
+
+    snprintf(buf, 41, "Time: %02d:%02d:%02d ", hours, minutes, seconds);
+    serial_stringout(buf);
+
+    return status;
+}
+
+uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
+    if((hours<0) || (hours>24) || (minutes>59) || (minutes<0) || (seconds>59) || (seconds<0) || (day>7) || (day<1)) {
+        serial_stringout("invalid time");
+        return -1;
+    }
+    uint8_t addr = 0;
+    uint8_t wbuf[4];
+    wbuf[0] = (seconds%10) | ((seconds/10)<<4);;
+    wbuf[1] = (minutes%10) | ((minutes/10)<<4);
+    wbuf[2] = (hours%10) | ((hours/10)<<4);
+    wbuf[3] = day;
+    
+    uint8_t status = i2c_io(0xD0, &addr, 1, wbuf, 4, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful i2c transfer %2d ", status);
+        serial_stringout(buf);
+    }
     return status;
 }
 
@@ -163,12 +202,15 @@ int main(void)
 
     // RTC init and write time //
     i2c_init(BDIV);
-    _delay_ms(10000);
-    init_rtc();
+    _delay_ms(5000);
+    //reset_time();
+    rtc_set(2, 4, 19, 30);
 
     while (1) {
 
-        debug_rtc();
+        //debug_rtc();
+        rtc_read();
+        _delay_ms(5000);
         /*
         if (saw_start_of_beat()) {
             char buf[30];
