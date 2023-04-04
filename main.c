@@ -10,7 +10,8 @@
 
 // Determine real time clock baud rate
 #define FOSC 7372800    // CPU clock freq
-#define BDIV (FOSC / 100000 - 16) / 2 + 1
+//#define BDIV (FOSC / 100000 - 16) / 2 + 1
+#define BDIV (FOSC / 50000 - 16) / 2 + 1
 
 // RTC global variables
 uint8_t seconds_ones;
@@ -24,6 +25,9 @@ uint8_t hours_tens;
 uint8_t hours;
 char* day;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
+// Timer variables
+volatile int timer2_interrupt_count = 0;
 
 /*
     Lab 3/4: Echo characters typed in terminal back to user -- used for debugging purposes
@@ -184,6 +188,43 @@ uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
         serial_stringout(buf);
     }
     return status;
+}
+
+// TODO: Sleep mode functions
+int check_if_wakeup() {
+    if(!rtc_read()) {
+        // no rtc error
+    }
+    
+    
+}
+
+void enter_idle_mode() {
+    // Sleep Enable pin set to 1
+    SMCR |= (1<<SE);
+    // Idle sleep mode -> SM2:0 = 000
+    SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
+}
+
+// TODO
+void timer_2_init() {
+    
+}
+
+ISR(TIMER2_COMPA_vect) {
+    // Disable sleep enable
+    SMCR &= ~(1<<SE);
+
+    // with prescalar of 1024, maximum time before timer2 counts up is 1/(16,000,000/1024) * (2^8-1) = 0.01632s
+    timer2_interrupt_count++; 
+    // to check real time clock every five minutes counter must reach 5*60/0.01632 = 18,383 times
+    if(timer2_interrupt_count >= 18383) {
+        timer2_interrupt_count = 0;
+        // Check RTC Clock
+
+    }
+    // Go back to sleep
+    SMCR |= (1<<SE);
 }
 
 
