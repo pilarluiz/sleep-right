@@ -7,6 +7,7 @@
 #include "serial.h"
 #include "pulse_interrupt.h"
 #include "i2c.h"
+#include "sleep_stage.h"
 
 // Determine real time clock baud rate
 #define FOSC 7372800    // CPU clock freq
@@ -191,6 +192,7 @@ uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
 }
 
 // TODO: Sleep mode functions
+// [pilar] do we want this to be an interrupt? not sure how we want to do RTC & wakeup time
 int check_if_wakeup() {
     if(!rtc_read()) {
         // no rtc error
@@ -240,6 +242,7 @@ int main(void)
     adc_init();
     pulse_sensor_init();
     interrupt_init();
+    void sleep_stage_init();
 
     // RTC init and write time //
     i2c_init(BDIV);
@@ -252,15 +255,22 @@ int main(void)
         //debug_rtc();
         rtc_read();
         _delay_ms(5000);
-        /*
+        
         if (saw_start_of_beat()) {
             char buf[30];
             snprintf(buf, 31, "BPM: '%2d'\n", BPM);
             serial_stringout(buf); 
+
+            // Add BPM to history array
+            bpm_history[bpm_history_idx++] = BPM;
+            bpm_history_idx %= 30;
+
+            uint8_t stage = sleep_stage();
+            // TODO: Do something with sleep stage (print to LCD, etc. )
         }  
 
         _delay_ms(20);
-        */
+        
     }
 
     return 0;   /* never reached */
