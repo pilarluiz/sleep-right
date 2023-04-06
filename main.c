@@ -26,6 +26,14 @@ uint8_t hours;
 char* day;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
+// User set wakeup time
+uint8_t wakeup_minutes_ones;
+uint8_t wakeup_minutes_tens;
+uint8_t wakeup_minutes;
+uint8_t wakeup_hours_ones;
+uint8_t wakeup_hours_tens;
+uint8_t wakeup_hours;
+
 // Timer variables
 volatile int timer2_interrupt_count = 0;
 
@@ -190,16 +198,44 @@ uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
     return status;
 }
 
-// TODO: Sleep mode functions
-int check_if_wakeup() {
-    if(!rtc_read()) {
-        // no rtc error
+uint8_t abs(uint8_t value) {
+    if(value<0) {
+        return -1*value;
+    } else {
+        return value;
     }
-    
-    
 }
 
-void enter_idle_mode() {
+// TODO: Sleep mode functions
+void check_if_wakeup() {
+    if(!rtc_read()) {       // no rtc error
+        // at wakeup time? Then must wake up
+        if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) ) || 
+        ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55)) || 
+        ((abs(wakeup_hours-hours) == 24) && (abs(wakeup_minutes-minutes) >= 55))) {
+            serial_stringout("at wakeup time \n");
+            vibrate_motor();
+            // turn timer off
+            TCCR2B &= ~ ((1<<CS00) | (1<<CS01) | (1<<CS02));
+            // turn sleep mode off
+            SMCR &= ~(1<<SE);
+            return 1;
+
+        } else if() {           // within 1 sleep cycle (1.5 hour) if wakeup?
+            // check if there is potentially an early wakeup
+            sleep_algorithm_here();
+        } else {
+            return 0;
+        }
+    } else {
+        // Error reading RTC
+        return -1;
+    }
+}
+
+
+
+void enter_idle_sleep_mode() {
     // Sleep Enable pin set to 1
     SMCR |= (1<<SE);
     // Idle sleep mode -> SM2:0 = 000
@@ -221,10 +257,34 @@ ISR(TIMER2_COMPA_vect) {
     if(timer2_interrupt_count >= 18383) {
         timer2_interrupt_count = 0;
         // Check RTC Clock
-
+        check_if_wakeup();
+        
     }
     // Go back to sleep
     SMCR |= (1<<SE);
+}
+
+void sleep_algorithm_here() {
+    // at wake up time
+}
+
+void vibrate_motor() {
+
+}
+
+void lcd_test() {
+
+    uint8_t write_addr = 0xFE;
+    uint8_t status = i2c_io(0x28, 0xFE, 1, 0x41, 1, NULL, 0);
+    if(status) {
+        serial_stringout("LCD error");
+    }
+    // _delay_ms(2000);
+    // status = i2c_io(0x28, 0xFE, 1, 0x42, 1, NULL, 0);
+    // if(status) {
+    //     serial_stringout("LCD error");
+    // }
+
 }
 
 
@@ -247,11 +307,14 @@ int main(void)
     //reset_time();
     rtc_set(2, 4, 19, 30);
 
+
+
     while (1) {
+        lcd_test();
 
         //debug_rtc();
-        rtc_read();
-        _delay_ms(5000);
+        //rtc_read();
+        _delay_ms(2000);
         /*
         if (saw_start_of_beat()) {
             char buf[30];
