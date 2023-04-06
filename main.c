@@ -14,6 +14,28 @@
 //#define BDIV (FOSC / 100000 - 16) / 2 + 1
 #define BDIV (FOSC / 50000 - 16) / 2 + 1
 
+#define LETTER_A  0x41;
+#define LETTER_B 0x42;
+#define LETTER_C 0x43
+#define LETTER_D 0x44
+#define LETTER_E 0x45
+#define LETTER_F 0x46
+#define LETTER_G 0x47
+#define LETTER_H 0x48
+#define LETTER_I 0x49
+#define LETTER_J 0x4A
+#define LETTER_K 0x4B
+#define LETTER_L 0x4C
+#define LETTER_M 0x4D
+#define LETTER_N 0x4E
+#define LETTER_O 0x4F
+#define LETTER_P 0x50
+#define LETTER_Q 0x51
+#define LETTER_R 0x52
+
+#define SEMICOLON 0x3A
+
+
 // RTC global variables
 uint8_t seconds_ones;
 uint8_t seconds_tens;
@@ -140,6 +162,51 @@ uint8_t reset_time() {
     return status;
 }
 
+void lcd_test(){
+    uint8_t addr = 0;
+    uint8_t wbuf[4];
+    wbuf[0] = 0xFE;
+    wbuf[1] = 0x4B;
+    //wbuf[1] = 0x00;
+    uint8_t status = i2c_io(0x50, &addr, 1, wbuf, 2, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful i2c transfer %2d \n", status);
+        serial_stringout(buf);
+        return status;
+    }
+    // _delay_ms(1000);
+
+    // Clear screen 
+    wbuf[1] = 0x51;
+    status = i2c_io(0x50, &addr, 1, wbuf, 2, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful i2c transfer %2d \n", status);
+        serial_stringout(buf);
+        return status;
+    }
+
+    _delay_ms(1000);
+
+    // wbuf[0] = 0x00;
+    // wbuf[1] = 0xA0;
+    wbuf[0] = LETTER_E;
+    wbuf[1] = 0x56;
+    wbuf[2] = LETTER_A;
+    wbuf[3] = LETTER_N;
+    // wbuf[2] = 0; 
+    status = i2c_io(0x50, NULL, 0, wbuf, 4, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful i2c transfer %2d \n", status);
+        serial_stringout(buf);
+        return status;
+    }
+
+    _delay_ms(1000);
+}
+
 uint8_t rtc_read() {
     uint8_t addr = 0;
     uint8_t rbuf[4];
@@ -254,8 +321,10 @@ int main(void)
 
         //debug_rtc();
         rtc_read();
-        _delay_ms(5000);
+        _delay_ms(1000);
+        lcd_test();
         
+        /*
         if (saw_start_of_beat()) {
             char buf[30];
             snprintf(buf, 31, "BPM: '%2d'\n", BPM);
@@ -268,6 +337,7 @@ int main(void)
             uint8_t stage = sleep_stage();
             // TODO: Do something with sleep stage (print to LCD, etc. )
         }  
+        */
 
         _delay_ms(20);
         
