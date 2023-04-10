@@ -32,6 +32,12 @@ void pulse_sensor_init(void) {
     secondBeat = 0;             // not yet looking for the second beat in a row
     FadeLevel = 0;              // LED is dark.
     sampleIntervalMs = (2 * 1000L) / 1000;
+
+    // Initialize bpm_history array with invalid readings & initialize index 
+    for(int i = 0; i < 30; ++i) {
+        bpm_history[i] = -1;
+    }
+    bpm_history_idx = 0; 
 }
 
 /*

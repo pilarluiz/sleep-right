@@ -29,3 +29,7 @@ int firstBeat;                   // used to seed rate array so we startup with r
 int secondBeat;                  // used to seed rate array so we startup with reasonable BPM
 
 unsigned long sampleIntervalMs;
+
+// Variables for sleep stage calculation
+int bpm_history[30];            // array of 30 most recent bpms
+int bpm_history_idx;            // index into bpm_history array
