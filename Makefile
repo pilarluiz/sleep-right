@@ -1,6 +1,6 @@
 DEVICE     = atmega328p
 CLOCK      = 7372800 
-PROGRAMMER = -c usbtiny -P usb
+PROGRAMMER = -c usbtiny -P COM3
 OBJECTS    = main.o adc.o pulse_sensor.o serial.o pulse_interrupt.o i2c.o
 FUSES      = -U hfuse:w:0xd9:m -U lfuse:w:0xe0:m
 
