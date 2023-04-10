@@ -7,6 +7,7 @@
 #include "serial.h"
 #include "pulse_interrupt.h"
 #include "i2c.h"
+#include "sleep_stage.h"
 
 // Determine real time clock baud rate
 #define FOSC 7372800    // CPU clock freq
@@ -124,7 +125,6 @@ void debug_rtc() {
     unsigned char status = i2c_io(0xD0, &regaddr, 1, times, 7, NULL, 0);
     _delay_ms(2000);
     */
-    
 }
 
 uint8_t reset_time() {
@@ -206,24 +206,38 @@ uint8_t abs(uint8_t value) {
     }
 }
 
-// TODO: Sleep mode functions
-void check_if_wakeup() {
-    if(!rtc_read()) {       // no rtc error
-        // at wakeup time? Then must wake up
-        if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) ) || 
+uint8_t check_if_at_wakeup() {
+    if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) ) || 
         ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55)) || 
         ((abs(wakeup_hours-hours) == 24) && (abs(wakeup_minutes-minutes) >= 55))) {
-            serial_stringout("at wakeup time \n");
-            vibrate_motor();
-            // turn timer off
-            TCCR2B &= ~ ((1<<CS00) | (1<<CS01) | (1<<CS02));
-            // turn sleep mode off
-            SMCR &= ~(1<<SE);
-            return 1;
+        return 1;
 
-        } else if() {           // within 1 sleep cycle (1.5 hour) if wakeup?
+    } else {
+        return 0;
+    }
+}
+
+uint8_t check_if_one_cycle_from_wakeup() {
+    if() {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+// TODO: Sleep mode functions
+void check_state() {
+    if(!rtc_read()) {       // no rtc error
+        // at wakeup time? Then must wake up
+        if( check_if_at_wakeup ) {
+            wake_up();
+            return 1;
+        } else if(check_if_one_cycle_from_wakeup()) {           // within 1 sleep cycle (1.5 hour) if wakeup?
             // check if there is potentially an early wakeup
-            sleep_algorithm_here();
+            uint8_t stage = sleep_stage();
+            if(stage == LIGHT_SLEEP || stage == REM_SLEEP) {
+                wake_up();
+            }
         } else {
             return 0;
         }
@@ -231,6 +245,15 @@ void check_if_wakeup() {
         // Error reading RTC
         return -1;
     }
+}
+
+void wake_up() {
+    serial_stringout("at wakeup time \n");
+    vibrate_motor();
+    // turn timer off
+    TCCR2B &= ~ ((1<<CS00) | (1<<CS01) | (1<<CS02));
+    // turn sleep mode off
+    SMCR &= ~(1<<SE);
 }
 
 
@@ -257,15 +280,11 @@ ISR(TIMER2_COMPA_vect) {
     if(timer2_interrupt_count >= 18383) {
         timer2_interrupt_count = 0;
         // Check RTC Clock
-        check_if_wakeup();
+        check_state();
         
     }
     // Go back to sleep
     SMCR |= (1<<SE);
-}
-
-void sleep_algorithm_here() {
-    // at wake up time
 }
 
 void vibrate_motor() {
@@ -300,6 +319,7 @@ int main(void)
     adc_init();
     pulse_sensor_init();
     interrupt_init();
+    sleep_stage_init();
 
     // RTC init and write time //
     i2c_init(BDIV);
@@ -313,17 +333,24 @@ int main(void)
         lcd_test();
 
         //debug_rtc();
-        //rtc_read();
-        _delay_ms(2000);
-        /*
+        rtc_read();
+        _delay_ms(5000);
+        
         if (saw_start_of_beat()) {
             char buf[30];
             snprintf(buf, 31, "BPM: '%2d'\n", BPM);
             serial_stringout(buf); 
+
+            // Add BPM to history array
+            bpm_history[bpm_history_idx++] = BPM;
+            bpm_history_idx %= 30;
+
+            uint8_t stage = sleep_stage();
+            // TODO: Do something with sleep stage (print to LCD, etc. )
         }  
 
         _delay_ms(20);
-        */
+        
     }
 
     return 0;   /* never reached */
