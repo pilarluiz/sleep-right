@@ -173,7 +173,7 @@ void lcd_clear(){
     uint8_t wbuf[2];
     wbuf[0] = 0xFE;
     wbuf[1] = 0x51;
-    status = i2c_io(0x50, NULL, 0, wbuf, 2, NULL, 0);
+    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 2, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful lcd clear %2d \n", status);
@@ -187,15 +187,17 @@ void lcd_rtc(uint8_t hour, uint8_t minutes){
     wbuf[0] = 0xFE;
     wbuf[1] = 0x45;
     wbuf[2] = 0x04;
-    status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful rtc print (moveto) %2d \n", status);
         serial_stringout(buf);
     }
     
+    _delay_ms(1);
+
     char sbuf[20];
-    snprintf(sbuf, 20, "Time: %02d, %02d ", hour, minutes);
+    snprintf(sbuf, 20, "Time:  %02d:%02d ", hour, minutes);
     status = i2c_io(0x50, NULL, 0, sbuf, 13, NULL, 0);
     if(status != 0) {
         char buf[40];
@@ -209,16 +211,18 @@ void lcd_alarm(uint8_t hour, uint8_t minutes){
     wbuf[0] = 0xFE;
     wbuf[1] = 0x45;
     wbuf[2] = 0x44;
-    status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful alarm print (moveto) %2d \n", status);
         serial_stringout(buf);
     }
     
+    _delay_ms(1);
+    
     char sbuf[20];
-    snprintf(sbuf, 20, "Alarm: %02d, %02d ", hour, minutes);
-    status = i2c_io(0x50, NULL, 0, sbuf, 13, NULL, 0);
+    snprintf(sbuf, 20, "Alarm: %02d:%02d ", hour, minutes);
+    status = i2c_io(0x50, NULL, 0, sbuf, 12, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful alarm print %2d \n", status);
@@ -340,14 +344,14 @@ uint8_t check_if_at_wakeup() {
         return 0;
     }
 }
-
+/*
 uint8_t check_if_one_cycle_from_wakeup() {
     if() {
         return 1;
     } else {
         return 0;
     }
-}
+}*/
 
 // TODO: Sleep mode functions
 void check_state() {
@@ -408,27 +412,13 @@ ISR(TIMER2_COMPA_vect) {
         
     }
     // Go back to sleep
-    SMCR |= (1<<SE);
+    SMCR |= (1<<SE); 
 }
 
 void vibrate_motor() {
 
 }
 
-void lcd_test() {
-
-    uint8_t write_addr = 0xFE;
-    uint8_t status = i2c_io(0x28, 0xFE, 1, 0x41, 1, NULL, 0);
-    if(status) {
-        serial_stringout("LCD error");
-    }
-    // _delay_ms(2000);
-    // status = i2c_io(0x28, 0xFE, 1, 0x42, 1, NULL, 0);
-    // if(status) {
-    //     serial_stringout("LCD error");
-    // }
-
-}
 
 
 int main(void)
@@ -454,12 +444,12 @@ int main(void)
 
 
     while (1) {
-        lcd_test();
-
-        //debug_rtc();
-        rtc_read();
-        _delay_ms(1000);
-        lcd_test();
+        lcd_clear();
+        _delay_ms(500);
+        lcd_rtc(12,12);
+        lcd_alarm(8,3);
+        _delay_ms(2000);
+        
         
         /*
         if (saw_start_of_beat()) {
