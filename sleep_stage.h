@@ -10,3 +10,4 @@ void sleep_stage_init(void);
 #define AWAKE 3
 
 uint8_t last_stage;
+extern int average_bpm[30];

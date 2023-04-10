@@ -13,7 +13,7 @@
     Initialize variables
 */
 void pulse_sensor_init(void) {
-    for(int i = 0; i < 10; ++i) {
+    for(int i = 0; i < 10; ++i){
         rate[i] = 0;
     }
 
