@@ -35,6 +35,9 @@
 
 #define SEMICOLON 0x3A
 
+// State Machine
+enum states {SETCLOCK, SETALARM, SLEEP, WAKE};
+volatile int state;
 
 // RTC global variables
 uint8_t seconds_ones;
@@ -57,8 +60,12 @@ uint8_t wakeup_hours_ones;
 uint8_t wakeup_hours_tens;
 uint8_t wakeup_hours;
 
-// Timer variables
+// Timer2 variables
 volatile int timer2_interrupt_count = 0;
+
+// Timer0 variables
+int timer0_modulus;
+
 
 /*
     Lab 3/4: Echo characters typed in terminal back to user -- used for debugging purposes
@@ -230,50 +237,6 @@ void lcd_alarm(uint8_t hour, uint8_t minutes){
     }
 }
 
-void lcd_test(){
-    uint8_t addr = 0;
-    uint8_t wbuf[4];
-    wbuf[0] = 0xFE;
-    wbuf[1] = 0x4B;
-    //wbuf[1] = 0x00;
-    uint8_t status = i2c_io(0x50, &addr, 1, wbuf, 2, NULL, 0);
-    if(status != 0) {
-        char buf[40];
-        snprintf(buf, 41, "unsuccessful i2c transfer %2d \n", status);
-        serial_stringout(buf);
-        return status;
-    }
-    // _delay_ms(1000);
-
-    // Clear screen 
-    wbuf[1] = 0x51;
-    status = i2c_io(0x50, &addr, 1, wbuf, 2, NULL, 0);
-    if(status != 0) {
-        char buf[40];
-        snprintf(buf, 41, "unsuccessful i2c transfer %2d \n", status);
-        serial_stringout(buf);
-        return status;
-    }
-
-    _delay_ms(1000);
-
-    // wbuf[0] = 0x00;
-    // wbuf[1] = 0xA0;
-    wbuf[0] = LETTER_E;
-    wbuf[1] = 0x56;
-    wbuf[2] = LETTER_A;
-    wbuf[3] = LETTER_N;
-    // wbuf[2] = 0; 
-    status = i2c_io(0x50, NULL, 0, wbuf, 4, NULL, 0);
-    if(status != 0) {
-        char buf[40];
-        snprintf(buf, 41, "unsuccessful i2c transfer %2d \n", status);
-        serial_stringout(buf);
-        return status;
-    }
-
-    _delay_ms(1000);
-}
 
 uint8_t rtc_read() {
     uint8_t addr = 0;
@@ -363,7 +326,7 @@ void check_state() {
         } else if(check_if_one_cycle_from_wakeup()) {           // within 1 sleep cycle (1.5 hour) if wakeup?
             // check if there is potentially an early wakeup
             uint8_t stage = sleep_stage();
-            if(stage == LIGHT_SLEEP || stage == REM_SLEEP) {
+            if(stage == LIGHT_SLEEP || stage == REM_SLEEP) {    // are these optimal sleep stages to wake up from?
                 wake_up();
             }
         } else {
@@ -386,16 +349,19 @@ void wake_up() {
 
 
 
-void enter_idle_sleep_mode() {
-    // Sleep Enable pin set to 1
-    SMCR |= (1<<SE);
+void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
+    // Set prescalar for timer2
+    TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
     // Idle sleep mode -> SM2:0 = 000
     SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
+    // Sleep Enable pin set to 1
+    SMCR |= (1<<SE);
+    
 }
 
 // TODO
 void timer_2_init() {
-    
+    TCCR2A |= ((1<<) | (1<<));
 }
 
 ISR(TIMER2_COMPA_vect) {
@@ -415,8 +381,23 @@ ISR(TIMER2_COMPA_vect) {
     SMCR |= (1<<SE); 
 }
 
-void vibrate_motor() {
+void timer0_init() {
+    TCCR0A |= (0b11 << WGM00);  // Set for Fast PWM mode using OCR0A for the modulus
+    TCCR0A |= (0b10 << COM0A0); // Set to turn OC0A (PB6) on at 0x00, off when TCNT0=OCR0A
+    timer0_modulus = 128;
+    OCR0A = 128;     // Initial PWM pulse width
+    TIMSK0 |= (1 << TOIE0);     // Enable Timer0 overflow interrupt 
+}
 
+void vibrate_motor() {
+    TCCR0B |= (0b101 << CS00);  // 256 prescalar; turn on timer0
+    int cycle_counter = 0;
+    while(cycle_counter < 25) {
+        cycle_counter++;
+        _delay_ms(200);
+        timer0_modulus+=4;
+        OCR0A = timer0_modulus;
+    }
 }
 
 
@@ -441,8 +422,11 @@ int main(void)
     //reset_time();
     rtc_set(2, 4, 19, 30);
 
+    // PWM for buzzer
+    timer0_init();
 
 
+    DDRD |= (1<<PD6);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
     while (1) {
         lcd_clear();
         _delay_ms(500);
@@ -472,9 +456,3 @@ int main(void)
 
     return 0;   /* never reached */
 }
-
-
-
-
-
-
