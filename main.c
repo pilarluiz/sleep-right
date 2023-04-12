@@ -298,11 +298,11 @@ uint8_t abs(uint8_t value) {
 }
 
 uint8_t check_if_at_wakeup() {
+    // check if within 5 minutes of wakeup time
     if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) ) || 
         ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55)) || 
         ((abs(wakeup_hours-hours) == 24) && (abs(wakeup_minutes-minutes) >= 55))) {
         return 1;
-
     } else {
         return 0;
     }
@@ -317,13 +317,13 @@ uint8_t check_if_one_cycle_from_wakeup() {
 }*/
 
 // TODO: Sleep mode functions
-void check_state() {
+int check_state() {
     if(!rtc_read()) {       // no rtc error
         // at wakeup time? Then must wake up
-        if( check_if_at_wakeup ) {
+        if( check_if_at_wakeup ) {      // if within 5 minutes of wakeup time, must wakeup regardless of sleep cycle
             wake_up();
             return 1;
-        } else if(check_if_one_cycle_from_wakeup()) {           // within 1 sleep cycle (1.5 hour) if wakeup?
+        } else if(check_if_one_cycle_from_wakeup()) {      // if 1 sleep cycle (1.5 hour) of wakeup, check sleep cycle
             // check if there is potentially an early wakeup
             uint8_t stage = sleep_stage();
             if(stage == LIGHT_SLEEP || stage == REM_SLEEP) {    // are these optimal sleep stages to wake up from?
@@ -346,8 +346,6 @@ void wake_up() {
     // turn sleep mode off
     SMCR &= ~(1<<SE);
 }
-
-
 
 void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
     // Set prescalar for timer2
@@ -381,9 +379,10 @@ ISR(TIMER2_COMPA_vect) {
     SMCR |= (1<<SE); 
 }
 
+//TODO connect motor to OC0A (PB6); currently is connectd to wrong pin (OC2A)
 void timer0_init() {
     TCCR0A |= (0b11 << WGM00);  // Set for Fast PWM mode using OCR0A for the modulus
-    TCCR0A |= (0b10 << COM0A0); // Set to turn OC0A (PB6) on at 0x00, off when TCNT0=OCR0A
+    TCCR0A |= (0b10 << COM0A0); // Set to turn OC0A (PB6) on at 0x00, off when TCNT0=OCR0A    
     timer0_modulus = 128;
     OCR0A = 128;     // Initial PWM pulse width
     TIMSK0 |= (1 << TOIE0);     // Enable Timer0 overflow interrupt 
@@ -392,14 +391,13 @@ void timer0_init() {
 void vibrate_motor() {
     TCCR0B |= (0b101 << CS00);  // 256 prescalar; turn on timer0
     int cycle_counter = 0;
-    while(cycle_counter < 25) {
+    while(cycle_counter < 25) {     // vibrate motor for 25*200ms = 5s
         cycle_counter++;
         _delay_ms(200);
-        timer0_modulus+=4;
-        OCR0A = timer0_modulus;
+        timer0_modulus+=4;          
+        OCR0A = timer0_modulus;     // increase duty cycle of PWM
     }
 }
-
 
 
 int main(void)
