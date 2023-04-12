@@ -9,6 +9,7 @@
 #include "pulse_interrupt.h"
 #include "i2c.h"
 #include "sleep_stage.h"
+#include "encoder.h"
 
 // Prototyping
 void debug_echoing(void);
@@ -70,17 +71,19 @@ uint8_t seconds_tens;
 uint8_t seconds;
 uint8_t minutes_ones;
 uint8_t minutes_tens;
-uint8_t minutes;
+volatile uint8_t minutes;
 uint8_t hours_ones;
 uint8_t hours_tens;
-uint8_t hours;
+volatile uint8_t hours;
 uint8_t day;
 char* day_word;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+volatile int clock_index = 0;     // Used to decipher between setting hours and minutes
 
 // Alarm variables
-uint8_t alarm_hours;
-uint8_t alarm_minutes;
+volatile uint8_t alarm_hours;
+volatile uint8_t alarm_minutes;
+volatile int alarm_index = 0;    // Used to decipher between setting hours and minutes
 
 // User set wakeup time
 uint8_t wakeup_minutes_ones;
@@ -93,6 +96,7 @@ uint8_t wakeup_day;         // not day of month but day of week 1-7, 1 being Sun
 
 // Timer2 variables
 volatile int timer2_interrupt_count = 0;
+volatile int changed = 0; 
 
 // Timer0 variables
 int timer0_modulus;
@@ -470,18 +474,6 @@ void vibrate_motor() {
     }
 }
 
-// TODO: Move
-ISR(PDINT1_vect)
-{
-    check_encoder();
-}
-
-void check_encoder()
-{
-    // TODO
-}
-
-
 int main(void)
 {
     // Voltage Level Test
@@ -513,12 +505,9 @@ int main(void)
     PORTB |= (1 << SELECT_BUTTON);
     lcd_clear();
 
-    // Local variables
-    int clock_index = 0;     // Used to decipher between setting hours and minutes
-    int alarm_index = 0;    // Used to decipher between setting hours and minutes
 
-    PDICR |= (1 << PDIE1);  // Enable PDINT on Port D
-	PDMSK1 |= (1 << PD2 | 1 << PD4); // Interrupt on PD2, PD4 for encoder
+    // TODO: initialize encoder
+    encoder_init();
 
     // TODO: initialize the clock and minute times with 24 hour clock
 
@@ -597,7 +586,7 @@ int main(void)
             // TODO
         } 
         
-        else if (state == WAKEUP)
+        else if (state == WAKE)
         {
             // TODO
         }
