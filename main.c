@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "adc.h"
 #include "pulse_sensor.h"
@@ -8,6 +9,25 @@
 #include "pulse_interrupt.h"
 #include "i2c.h"
 #include "sleep_stage.h"
+
+// Prototyping
+void debug_echoing(void);
+void debug_rtc(void);
+uint8_t reset_time(void);
+void lcd_clear(void);
+void lcd_rtc(uint8_t, uint8_t);
+void lcd_alarm(uint8_t, uint8_t);
+uint8_t rtc_read(void);
+uint8_t rtc_set(uint8_t, uint8_t, uint8_t, uint8_t);
+uint8_t check_if_at_wakeup(void);
+uint8_t check_if_one_cycle_from_wakeup(void);
+int check_state(void);
+void wake_up(void);
+void enter_idle_sleep_mode(void);
+// void timer_2_init(void);
+void timer0_init(void);
+void vibrate_motor(void);
+void wake_up(void);
 
 // Determine real time clock baud rate
 #define FOSC 7372800    // CPU clock freq
@@ -192,7 +212,7 @@ void lcd_clear(){
 }
 
 void lcd_rtc(uint8_t hour, uint8_t minutes){
-    char wbuf[3];
+    uint8_t wbuf[3];
     wbuf[0] = 0xFE;
     wbuf[1] = 0x45;
     wbuf[2] = 0x04;
@@ -207,7 +227,7 @@ void lcd_rtc(uint8_t hour, uint8_t minutes){
 
     char sbuf[20];
     snprintf(sbuf, 20, "Time:  %02d:%02d ", hour, minutes);
-    status = i2c_io(0x50, NULL, 0, sbuf, 13, NULL, 0);
+    status = i2c_io(0x50, NULL, 0, (uint8_t *)sbuf, 13, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful rtc print %2d \n", status);
@@ -216,7 +236,7 @@ void lcd_rtc(uint8_t hour, uint8_t minutes){
 }
 
 void lcd_alarm(uint8_t hour, uint8_t minutes){
-    char wbuf[3];
+    unsigned char wbuf[3];
     wbuf[0] = 0xFE;
     wbuf[1] = 0x45;
     wbuf[2] = 0x44;
@@ -231,7 +251,7 @@ void lcd_alarm(uint8_t hour, uint8_t minutes){
     
     char sbuf[20];
     snprintf(sbuf, 20, "Alarm: %02d:%02d ", hour, minutes);
-    status = i2c_io(0x50, NULL, 0, sbuf, 12, NULL, 0);
+    status = i2c_io(0x50, NULL, 0, (uint8_t *)sbuf, 12, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful alarm print %2d \n", status);
@@ -292,6 +312,11 @@ uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
     return status;
 }
 
+// TODO
+// void timer_2_init() {
+//     TCCR2A |= ((1<<) | (1<<));
+// }
+
 void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
     // Set prescalar for timer2
     TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
@@ -302,11 +327,6 @@ void enter_idle_sleep_mode() {              // does order of sleep mode enable s
     
 }
 
-// TODO
-// void timer_2_init() {
-//     TCCR2A |= ((1<<) | (1<<));
-// }
-
 // TODO: Sleep mode functions
 int check_state() {
     if(!rtc_read()) {       // no rtc error
@@ -316,9 +336,21 @@ int check_state() {
             return 1;
         } else if(check_if_one_cycle_from_wakeup()) {      // if 1 sleep cycle (1.5 hour) of wakeup, check sleep cycle
             // check if there is potentially an early wakeup
+            // Determine current stage of sleep
             uint8_t stage = sleep_stage();
-            if(stage == LIGHT_SLEEP || stage == REM_SLEEP) {    // are these optimal sleep stages to wake up from?
+            if (stage == LIGHT_SLEEP) {
+                serial_stringout("STAGE: LIGHT\n"); 
+            } else if (stage == DEEP_SLEEP) {
+                serial_stringout("STAGE: DEEP\n"); 
+            } else if (stage == REM_SLEEP) {
+                serial_stringout("STAGE: REM\n"); 
+            } else {
+                serial_stringout("STAGE: AWAKE\n"); 
+            }
+
+            if(stage_changed()) {    // Wake up when changing sleep stages
                 wake_up();
+                return 1;
             }
         } else {
             return 0;
@@ -330,7 +362,7 @@ int check_state() {
 }
 
 // TODO: check for day as well
-int check_if_at_wakeup() {
+uint8_t check_if_at_wakeup() {
     int day_diff = wakeup_day - day;
     // check if within 5 minutes of wakeup time
     if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) && (day_diff==0)) ||                 
@@ -360,7 +392,7 @@ CASE 3:
 */
 
 // TODO: check for day
-int check_if_one_cycle_from_wakeup() {
+uint8_t check_if_one_cycle_from_wakeup() {
     int total_minutes = 60*hours+minutes;
     int total_wakeup_minutes = 60*wakeup_hours+wakeup_minutes;
     int diff = total_wakeup_minutes-total_minutes;
