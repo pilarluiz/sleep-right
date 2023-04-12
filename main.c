@@ -1,6 +1,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "adc.h"
 #include "pulse_sensor.h"
@@ -8,6 +9,25 @@
 #include "pulse_interrupt.h"
 #include "i2c.h"
 #include "sleep_stage.h"
+
+// Prototyping
+void debug_echoing(void);
+void debug_rtc(void);
+uint8_t reset_time(void);
+void lcd_clear(void);
+void lcd_rtc(uint8_t, uint8_t);
+void lcd_alarm(uint8_t, uint8_t);
+uint8_t rtc_read(void);
+uint8_t rtc_set(uint8_t, uint8_t, uint8_t, uint8_t);
+uint8_t check_if_at_wakeup(void);
+uint8_t check_if_one_cycle_from_wakeup(void);
+void check_state(void);
+void wake_up(void);
+void enter_idle_sleep_mode(void);
+// void timer_2_init(void);
+void timer0_init(void);
+void vibrate_motor(void);
+void wake_up(void);
 
 // Determine real time clock baud rate
 #define FOSC 7372800    // CPU clock freq
@@ -190,7 +210,7 @@ void lcd_clear(){
 }
 
 void lcd_rtc(uint8_t hour, uint8_t minutes){
-    char wbuf[3];
+    uint8_t wbuf[3];
     wbuf[0] = 0xFE;
     wbuf[1] = 0x45;
     wbuf[2] = 0x04;
@@ -205,7 +225,7 @@ void lcd_rtc(uint8_t hour, uint8_t minutes){
 
     char sbuf[20];
     snprintf(sbuf, 20, "Time:  %02d:%02d ", hour, minutes);
-    status = i2c_io(0x50, NULL, 0, sbuf, 13, NULL, 0);
+    status = i2c_io(0x50, NULL, 0, (uint8_t *)sbuf, 13, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful rtc print %2d \n", status);
@@ -214,7 +234,7 @@ void lcd_rtc(uint8_t hour, uint8_t minutes){
 }
 
 void lcd_alarm(uint8_t hour, uint8_t minutes){
-    char wbuf[3];
+    unsigned char wbuf[3];
     wbuf[0] = 0xFE;
     wbuf[1] = 0x45;
     wbuf[2] = 0x44;
@@ -229,7 +249,7 @@ void lcd_alarm(uint8_t hour, uint8_t minutes){
     
     char sbuf[20];
     snprintf(sbuf, 20, "Alarm: %02d:%02d ", hour, minutes);
-    status = i2c_io(0x50, NULL, 0, sbuf, 12, NULL, 0);
+    status = i2c_io(0x50, NULL, 0, (uint8_t *)sbuf, 12, NULL, 0);
     if(status != 0) {
         char buf[40];
         snprintf(buf, 41, "unsuccessful alarm print %2d \n", status);
@@ -289,14 +309,6 @@ uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
     return status;
 }
 
-uint8_t abs(uint8_t value) {
-    if(value<0) {
-        return -1*value;
-    } else {
-        return value;
-    }
-}
-
 uint8_t check_if_at_wakeup() {
     if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) ) || 
         ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55)) || 
@@ -307,34 +319,47 @@ uint8_t check_if_at_wakeup() {
         return 0;
     }
 }
-/*
+
+// TODO: Write function
 uint8_t check_if_one_cycle_from_wakeup() {
-    if() {
+    if(1) {
         return 1;
     } else {
         return 0;
     }
-}*/
+}
 
 // TODO: Sleep mode functions
+// @baran: do you want this function to be void or return an int? i commented out the returns
 void check_state() {
     if(!rtc_read()) {       // no rtc error
         // at wakeup time? Then must wake up
-        if( check_if_at_wakeup ) {
+        if( check_if_at_wakeup() ) {
             wake_up();
-            return 1;
+            // return 1;
         } else if(check_if_one_cycle_from_wakeup()) {           // within 1 sleep cycle (1.5 hour) if wakeup?
             // check if there is potentially an early wakeup
+            // Determine current stage of sleep
             uint8_t stage = sleep_stage();
-            if(stage == LIGHT_SLEEP || stage == REM_SLEEP) {    // are these optimal sleep stages to wake up from?
+            if (stage == LIGHT_SLEEP) {
+                serial_stringout("STAGE: LIGHT\n"); 
+            } else if (stage == DEEP_SLEEP) {
+                serial_stringout("STAGE: DEEP\n"); 
+            } else if (stage == REM_SLEEP) {
+                serial_stringout("STAGE: REM\n"); 
+            } else {
+                serial_stringout("STAGE: AWAKE\n"); 
+            }
+
+            if(stage_changed()) {    // Wake up when changing sleep stages
                 wake_up();
             }
         } else {
-            return 0;
+            // return 0;
         }
     } else {
         // Error reading RTC
-        return -1;
+        // return -1;
     }
 }
 
@@ -359,10 +384,10 @@ void enter_idle_sleep_mode() {              // does order of sleep mode enable s
     
 }
 
-// TODO
-void timer_2_init() {
-    TCCR2A |= ((1<<) | (1<<));
-}
+// TODO: 
+// void timer_2_init() {
+//     TCCR2A |= ((1<<) | (1<<));
+// }
 
 ISR(TIMER2_COMPA_vect) {
     // Disable sleep enable
@@ -399,7 +424,6 @@ void vibrate_motor() {
         OCR0A = timer0_modulus;
     }
 }
-
 
 
 int main(void)

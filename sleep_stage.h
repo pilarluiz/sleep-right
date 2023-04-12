@@ -3,6 +3,7 @@
 
 uint8_t sleep_stage(void);
 void sleep_stage_init(void);
+uint8_t stage_changed(void);
 
 #define LIGHT_SLEEP 0
 #define DEEP_SLEEP 1
@@ -11,3 +12,4 @@ void sleep_stage_init(void);
 
 uint8_t last_stage;
 extern int average_bpm[30];
+uint8_t stage_change; 

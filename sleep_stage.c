@@ -1,12 +1,11 @@
 #include "sleep_stage.h"
 
-// TODO: If stage switched, check if current time is optimal wakeup time
-
 // TODO: Create tests for sleep stages
 
 void sleep_stage_init()
 {
     last_stage = AWAKE;
+    stage_change = 0; 
 }
 
 uint8_t sleep_stage()
@@ -34,9 +33,18 @@ uint8_t sleep_stage()
         current_stage = AWAKE;
     }
 
+    // Sleep stage has changed
     if (last_stage != current_stage) {
-        // TODO: stage has changed; check if optimal time to wakeup
+        stage_change = 1; 
+        last_stage = current_stage; 
+    } else {
+        stage_change = 0; 
     }
 
     return current_stage;
+}
+
+uint8_t stage_changed()
+{
+    return stage_change; 
 }
