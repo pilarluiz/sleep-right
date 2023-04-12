@@ -34,6 +34,11 @@ void wake_up(void);
 //#define BDIV (FOSC / 100000 - 16) / 2 + 1
 #define BDIV (FOSC / 50000 - 16) / 2 + 1
 
+#define LEFT_BUTTON PD5
+#define RIGHT_BUTTON PD6
+#define TOGGLE_BUTTON PD7
+#define SELECT_BUTTON PB0
+
 #define LETTER_A  0x41;
 #define LETTER_B 0x42;
 #define LETTER_C 0x43
@@ -56,7 +61,7 @@ void wake_up(void);
 #define SEMICOLON 0x3A
 
 // State Machine
-enum states {SETCLOCK, SETALARM, SLEEP, WAKE};
+enum states {SETCLOCK, SETALARM, SLEEP, WAKE, DONE};
 volatile int state;
 
 // RTC global variables
@@ -71,6 +76,10 @@ uint8_t hours_tens;
 uint8_t hours;
 char* day;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+
+// Alarm variables
+uint8_t alarm_hours;
+uint8_t alarm_minutes;
 
 // User set wakeup time
 uint8_t wakeup_minutes_ones;
@@ -288,6 +297,7 @@ uint8_t rtc_read() {
     return status;
 }
 
+// TODO: Do we need the day and seconds for setting?
 uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
     if((hours<0) || (hours>24) || (minutes>59) || (minutes<0) || (seconds>59) || (seconds<0) || (day>7) || (day<1)) {
         serial_stringout("invalid time");
@@ -425,12 +435,25 @@ void vibrate_motor() {
     }
 }
 
+// TODO: Move
+ISR(PDINT1_vect)
+{
+    check_encoder();
+}
+
+void check_encoder()
+{
+    // TODO
+}
+
 
 int main(void)
 {
     // Voltage Level Test
     unsigned short ubrr = ( ( FOSC / 16 ) / 9600) - 1; 
     serial_init(ubrr); 
+    
+    state = SETCLOCK;
 
     _delay_ms(100);
 
@@ -451,12 +474,103 @@ int main(void)
 
 
     DDRD |= (1<<PD6);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
+    PORTD |= (1 << LEFT_BUTTON) | (1 << RIGHT_BUTTON) | (1 << TOGGLE_BUTTON);
+    PORTB |= (1 << SELECT_BUTTON);
+    lcd_clear();
+
+    // Local variables
+    int clock_index = 0;     // Used to decipher between setting hours and minutes
+    int alarm_index = 0;    // Used to decipher between setting hours and minutes
+
+    PDICR |= (1 << PDIE1);  // Enable PDINT on Port D
+	PDMSK1 |= (1 << PD2 | 1 << PD4); // Interrupt on PD2, PD4 for encoder
+
+    // TODO: initialize the clock and minute times with 24 hour clock
+
     while (1) {
-        lcd_clear();
-        _delay_ms(500);
-        lcd_rtc(12,12);
-        lcd_alarm(8,3);
-        _delay_ms(2000);
+        if (state == SETCLOCK) {
+            // Toggling
+            if (PIND & (1 << TOGGLE_BUTTON)) {
+                while (PIND & (1 << TOGGLE_BUTTON)) {}
+                state = SETALARM; 
+            }
+
+            else if (PINB & (1 << SELECT_BUTTON)) {
+                while (PINB & (1 << SELECT_BUTTON)) {}
+
+                // Irrelevant values now
+                uint8_t day = 0; 
+                uint8_t seconds = 0; 
+                
+                // Set RTC
+                uint8_t status = rtc_set(day, hours, minutes, seconds);
+                state = SLEEP; 
+            }
+
+            // If right button pressed, increase alarm index
+            else if (PIND & (1 << RIGHT_BUTTON)) {
+                while (PIND & (1 << RIGHT_BUTTON)) {}
+                clock_index = (++clock_index) % 2;
+            } 
+
+            else if (PIND & (1 << LEFT_BUTTON)) {
+                while (PIND & (1 << LEFT_BUTTON)) {}
+                clock_index = (--clock_index) % 2;
+            }
+
+            if (changed) {
+                lcd_rtc(hours, minutes);
+            }
+        } 
+        
+        else if(state == SETALARM) {
+            // Toggling
+            if (PIND & (1 << TOGGLE_BUTTON)) {
+                while (PIND & (1 << TOGGLE_BUTTON)) {}
+                state = SETCLOCK; 
+            }
+
+            else if (PINB & (1 << SELECT_BUTTON)) {
+                while (PINB & (1 << SELECT_BUTTON)) {}
+
+                // Irrelevant values now
+                uint8_t day = 0; 
+                uint8_t seconds = 0; 
+                
+                // Set RTC
+                uint8_t status = rtc_set(day, hours, minutes, seconds);
+                state = SLEEP; 
+            }
+
+            // If right button pressed, increase alarm index
+            else if (PIND & (1 << RIGHT_BUTTON)) {
+                while (PIND & (1 << RIGHT_BUTTON)) {}
+                alarm_index = (++alarm_index) % 2;
+            } 
+
+            else if (PIND & (1 << LEFT_BUTTON)) {
+                while (PIND & (1 << LEFT_BUTTON)) {}
+                alarm_index = (--alarm_index) % 2;
+            }
+
+            if (changed) {
+                lcd_alarm(alarm_hours, alarm_minutes);
+            }
+        } 
+        
+        else if (state == SLEEP) {
+            // TODO
+        } 
+        
+        else if (state == WAKEUP)
+        {
+            // TODO
+        }
+        
+        // _delay_ms(500);
+        // lcd_rtc(12,12);
+        // lcd_alarm(8,3);
+        // _delay_ms(2000);
         
         
         /*
