@@ -49,7 +49,8 @@ uint8_t minutes;
 uint8_t hours_ones;
 uint8_t hours_tens;
 uint8_t hours;
-char* day;
+uint8_t day;
+char* day_word;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 // User set wakeup time
@@ -59,6 +60,7 @@ uint8_t wakeup_minutes;
 uint8_t wakeup_hours_ones;
 uint8_t wakeup_hours_tens;
 uint8_t wakeup_hours;
+uint8_t wakeup_day;         // not day of month but day of week 1-7, 1 being Sunday
 
 // Timer2 variables
 volatile int timer2_interrupt_count = 0;
@@ -258,7 +260,8 @@ uint8_t rtc_read() {
     hours_ones = rbuf[2] & (0x0F);
     hours_tens = (rbuf[2] & (0x10)) >> 4;
     hours = hours_ones + 10*hours_tens;
-    day = days[rbuf[3] & (0x07)];
+    day = rbuf[3] & (0x07);
+    day_word = days[day];
 
     char buf[40];
 
@@ -289,38 +292,26 @@ uint8_t rtc_set(uint8_t day, uint8_t hours, uint8_t minutes, uint8_t seconds) {
     return status;
 }
 
-uint8_t abs(uint8_t value) {
-    if(value<0) {
-        return -1*value;
-    } else {
-        return value;
-    }
+void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
+    // Set prescalar for timer2
+    TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
+    // Idle sleep mode -> SM2:0 = 000
+    SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
+    // Sleep Enable pin set to 1
+    SMCR |= (1<<SE);
+    
 }
 
-uint8_t check_if_at_wakeup() {
-    // check if within 5 minutes of wakeup time
-    if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) ) || 
-        ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55)) || 
-        ((abs(wakeup_hours-hours) == 24) && (abs(wakeup_minutes-minutes) >= 55))) {
-        return 1;
-    } else {
-        return 0;
-    }
-}
-/*
-uint8_t check_if_one_cycle_from_wakeup() {
-    if() {
-        return 1;
-    } else {
-        return 0;
-    }
-}*/
+// TODO
+// void timer_2_init() {
+//     TCCR2A |= ((1<<) | (1<<));
+// }
 
 // TODO: Sleep mode functions
 int check_state() {
     if(!rtc_read()) {       // no rtc error
         // at wakeup time? Then must wake up
-        if( check_if_at_wakeup ) {      // if within 5 minutes of wakeup time, must wakeup regardless of sleep cycle
+        if( check_if_at_wakeup() ) {      // if within at wakeup time, must wakeup regardless of sleep cycle
             wake_up();
             return 1;
         } else if(check_if_one_cycle_from_wakeup()) {      // if 1 sleep cycle (1.5 hour) of wakeup, check sleep cycle
@@ -338,6 +329,59 @@ int check_state() {
     }
 }
 
+// TODO: check for day as well
+int check_if_at_wakeup() {
+    int day_diff = wakeup_day - day;
+    // check if within 5 minutes of wakeup time
+    if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) && (day_diff==0)) ||                 
+        ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55) && (day_diff==0)) ||         
+        ((abs(wakeup_hours-hours) == 24) && (abs(wakeup_minutes-minutes) >= 55) && ((day_diff==1)||(day_diff==-6)))) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+/*
+3 Cases for 1.5 hours away
+Format for 3 cases:
+Wakeup time range, begin to end
+Current time range,	begin to end
+
+CASE 1:
+9       to 	9:29		same day
+7:30	to	7:59
+CASE 2:
+9:30	to 	9:59		same day
+8:00 	to 	8:29
+CASE 3:
+00 		to 	1:29		day up by 1 (difference in day by 1 unless at last day of week)
+22:30	to 	23:59
+*/
+
+// TODO: check for day
+int check_if_one_cycle_from_wakeup() {
+    int total_minutes = 60*hours+minutes;
+    int total_wakeup_minutes = 60*wakeup_hours+wakeup_minutes;
+    int diff = total_wakeup_minutes-total_minutes;
+    int day_diff = wakeup_day - day;
+    if((diff<=90) && (day_diff==0)) {        // within 1 sleep cycle of wakeup time
+        return 1;
+    } else if((total_wakeup_minutes>=0) && (total_wakeup_minutes<=89) && ((-1*diff)<=1350) && ((day_diff==1) || (day_diff==-6))) {         // accounts for case 3
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+uint8_t abs(uint8_t value) {
+    if(value<0) {
+        return -1*value;
+    } else {
+        return value;
+    }
+}
+
 void wake_up() {
     serial_stringout("at wakeup time \n");
     vibrate_motor();
@@ -345,21 +389,6 @@ void wake_up() {
     TCCR2B &= ~ ((1<<CS00) | (1<<CS01) | (1<<CS02));
     // turn sleep mode off
     SMCR &= ~(1<<SE);
-}
-
-void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
-    // Set prescalar for timer2
-    TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
-    // Idle sleep mode -> SM2:0 = 000
-    SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
-    // Sleep Enable pin set to 1
-    SMCR |= (1<<SE);
-    
-}
-
-// TODO
-void timer_2_init() {
-    TCCR2A |= ((1<<) | (1<<));
 }
 
 ISR(TIMER2_COMPA_vect) {
