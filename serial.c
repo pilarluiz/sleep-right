@@ -1,4 +1,5 @@
 #include <avr/io.h>
+#include <stdio.h>
 
 #include "serial.h"
 
@@ -38,5 +39,24 @@ void serial_stringout(char *s)
     int i = 0; 
     while(s[i] != '\0') {
         serial_out(s[i++]);
+    }
+}
+
+/*
+    Lab 3/4: Echo characters typed in terminal back to user -- used for debugging purposes
+*/
+void debug_echoing()
+{
+    while(1) {
+        char in = serial_in(); 
+
+        char buf[30];
+        if ((in == 'a') || (in == 'e') || (in == 'i') || (in == 'o') || (in == 'u') || (in == 'y')) {
+            snprintf(buf, 31, "You entered the vowel '%c'\n", in);
+            serial_stringout(buf);
+        } else {
+            snprintf(buf, 31, "You entered the consonant '%c'\n", in);
+            serial_stringout(buf);
+        }
     }
 }
