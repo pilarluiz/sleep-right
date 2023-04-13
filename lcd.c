@@ -5,6 +5,50 @@
 #include "serial.h"
 #include "i2c.h"
 
+void lcd_splash_screen() {
+    // Move to top row
+    uint8_t wbuf[3];
+    wbuf[0] = 0xFE;
+    wbuf[1] = 0x45;
+    wbuf[2] = 0x01;
+    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful alarm print (moveto) %2d \n", status);
+        serial_stringout(buf);
+    }
+    _delay_ms(1);
+
+    char topbuf[20];
+    snprintf(topbuf, 20, "EE459: SleepRight");
+    status = i2c_io(0x50, NULL, 0, (uint8_t *)topbuf, 20, NULL, 0);
+
+    // Move to bottom row 
+    wbuf[0] = 0xFE;
+    wbuf[1] = 0x45;
+    wbuf[2] = 0x14;
+    status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful alarm print (moveto) %2d \n", status);
+        serial_stringout(buf);
+    }
+
+    _delay_ms(1);
+
+    char bottombuf[20];
+    snprintf(topbuf, 20, "Baran, Evan, Pilar");
+    status = i2c_io(0x50, NULL, 0, (uint8_t *)bottombuf, 13, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful rtc print %2d \n", status);
+        serial_stringout(buf);
+    }
+
+    _delay_ms(3000);
+    lcd_clear();
+}
+
 void lcd_clear() {
     uint8_t wbuf[2];
     wbuf[0] = 0xFE;

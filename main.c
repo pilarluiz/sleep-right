@@ -254,11 +254,9 @@ int main(void)
 {
     // Voltage Level Test
     unsigned short ubrr = ( ( FOSC / 16 ) / 9600) - 1; 
-    serial_init(ubrr); 
-
-    _delay_ms(100);
 
     // Initializations
+    serial_init(ubrr); 
     adc_init();
     pulse_sensor_init();
     interrupt_init();
@@ -274,14 +272,12 @@ int main(void)
 
     // Variable Initializations
     state = SETCLOCK;
-    rtc_set(2, 4, 19, 30);
     hours = 0;
     minutes = 0; 
     alarm_hours = 0; 
     alarm_minutes = 0; 
     
-    lcd_clear();
-    _delay_ms(5000);
+    lcd_splash_screen();
 
     while (1) {
         if (state == SETCLOCK) {
