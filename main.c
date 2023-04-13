@@ -36,31 +36,10 @@ void wake_up(void);
 //#define BDIV (FOSC / 100000 - 16) / 2 + 1
 #define BDIV (FOSC / 50000 - 16) / 2 + 1
 
-#define LEFT_BUTTON PB1 
-#define RIGHT_BUTTON PD6
+#define LEFT_BUTTON PB1         // PIN15
+#define RIGHT_BUTTON PD6        // PIN12
 #define TOGGLE_BUTTON PD7
 #define SELECT_BUTTON PB0
-
-#define LETTER_A  0x41;
-#define LETTER_B 0x42;
-#define LETTER_C 0x43
-#define LETTER_D 0x44
-#define LETTER_E 0x45
-#define LETTER_F 0x46
-#define LETTER_G 0x47
-#define LETTER_H 0x48
-#define LETTER_I 0x49
-#define LETTER_J 0x4A
-#define LETTER_K 0x4B
-#define LETTER_L 0x4C
-#define LETTER_M 0x4D
-#define LETTER_N 0x4E
-#define LETTER_O 0x4F
-#define LETTER_P 0x50
-#define LETTER_Q 0x51
-#define LETTER_R 0x52
-
-#define SEMICOLON 0x3A
 
 // State Machine
 enum states {SETCLOCK, SETALARM, SLEEP, WAKE, DONE};
@@ -141,6 +120,8 @@ int check_state() {
             if(stage_changed()) {    // Wake up when changing sleep stages
                 wake_up();
                 return 1;
+            } else {
+                return 0; 
             }
         } else {
             return 0;
@@ -257,6 +238,8 @@ int main(void)
 
     // Initializations
     serial_init(ubrr); 
+
+    _delay_ms(2000);
     adc_init();
     pulse_sensor_init();
     interrupt_init();
@@ -279,16 +262,27 @@ int main(void)
     
     lcd_splash_screen();
 
+    // Initial time printout
+    lcd_alarm(alarm_hours, alarm_minutes);
+    lcd_rtc(hours, minutes);
+
+    serial_stringout("testing\n");
+    _delay_ms(50);
+
     while (1) {
         if (state == SETCLOCK) {
             // Toggling
             if (PIND & (1 << TOGGLE_BUTTON)) {
                 while (PIND & (1 << TOGGLE_BUTTON)) {}
+                serial_stringout("SETCLOCK: Toggle Pressed\n");
+                lcd_debug_print("SETCLK: TOGGLE", 14);
                 state = SETALARM; 
             }
 
             else if (PINB & (1 << SELECT_BUTTON)) {
                 while (PINB & (1 << SELECT_BUTTON)) {}
+                serial_stringout("SETCLOCK: Select Pressed\n");
+                lcd_debug_print("SETCLK: SELECT", 14);
 
                 // Irrelevant values now
                 uint8_t day = 0; 
@@ -302,11 +296,15 @@ int main(void)
             // If right button pressed, increase alarm index
             else if (PIND & (1 << RIGHT_BUTTON)) {
                 while (PIND & (1 << RIGHT_BUTTON)) {}
+                serial_stringout("SETCLOCK: Right Pressed\n");
+                lcd_debug_print("SETCLK: RIGHT ", 14);
                 clock_index = (clock_index + 1) % 2;
             } 
 
             else if (PINB & (1 << LEFT_BUTTON)) {
                 while (PINB & (1 << LEFT_BUTTON)) {}
+                serial_stringout("SETCLOCK: Left Pressed\n");
+                lcd_debug_print("SETCLK: LEFT  ", 14);
                 clock_index = (clock_index - 1) % 2;
             }
 
@@ -319,11 +317,13 @@ int main(void)
             // Toggling
             if (PIND & (1 << TOGGLE_BUTTON)) {
                 while (PIND & (1 << TOGGLE_BUTTON)) {}
+                serial_stringout("SETALARM: Toggle Pressed\n");
                 state = SETCLOCK; 
             }
 
             else if (PINB & (1 << SELECT_BUTTON)) {
                 while (PINB & (1 << SELECT_BUTTON)) {}
+                serial_stringout("SETALARM: Select Pressed\n");
 
                 // Irrelevant values now
                 uint8_t day = 0; 
@@ -337,11 +337,13 @@ int main(void)
             // If right button pressed, increase alarm index
             else if (PIND & (1 << RIGHT_BUTTON)) {
                 while (PIND & (1 << RIGHT_BUTTON)) {}
+                serial_stringout("SETALARM: Right Pressed\n");
                 alarm_index = (alarm_index + 1) % 2;
             } 
 
             else if (PINB & (1 << LEFT_BUTTON)) {
                 while (PINB & (1 << LEFT_BUTTON)) {}
+                serial_stringout("SETALARM: Left Pressed\n");
                 alarm_index = (alarm_index - 1) % 2;
             }
 
