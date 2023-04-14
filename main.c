@@ -2,6 +2,8 @@
 #include <util/delay.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <avr/wdt.h>
+#include <avr/sleep.h>
 
 #include "adc.h"
 #include "pulse_sensor.h"
@@ -11,6 +13,7 @@
 #include "sleep_stage.h"
 #include "encoder.h"
 #include "lcd.h"
+
 
 // Prototyping
 void debug_echoing(void);
@@ -265,6 +268,18 @@ void vibrate_motor() {
 //     TCCR2B |= (0b111 << CS20);  // Prescaler = 1024 for 16ms period
 // }
 
+// props to this dude: https://wolles-elektronikkiste.de/en/sleep-modes-and-power-management
+void watchdogSetup(void){
+  cli();
+  wdt_reset();
+  WDTCSR |= (1<<WDCE) | (1<<WDE);
+  WDTCSR = (1<<WDIE) | (0<<WDE) | (1<<WDP3) | (1<<WDP0);  // 8s / interrupt, no system reset
+  sei();
+}
+
+ISR(WDT_vect){//put in additional code here
+}
+
 int main(void)
 {
     // Voltage Level Test
@@ -317,19 +332,35 @@ int main(void)
     // DDRD |= (1<<PD3);
     // enter_idle_sleep_mode();
 
-    uint8_t wbuf[2];
-    wbuf[0] = 0xFE;
-    wbuf[1] = 0x42;
-    //wbuf[2] = 0x04;
-    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 2, NULL, 0);
-    SMCR &= ~((1<<SM2) | (1<<SM0));
-    SMCR |= ((1<<SM1));
+    // DDRD |= (1<<PD3);
+    // SMCR |= (1<<SE);
+    // SMCR &= ~((1<<SM2) | (1<<SM0));
+    // SMCR |= ((1<<SM1));
     // Sleep Enable pin set to 1
-    SMCR |= (1<<SE);
+    
 
-    
-    
+    // _delay_ms(2000);
+    // PORTD |= (1<<PD3);
+    watchdogSetup();
+    DDRD |= (1<<PD3);
+
     while (1) {
+        // watchdog timer interrupt power down mode demo
+        PORTD |= (1<<PD3);  // equals (roughly) digitalWrite(7, HIGH);
+        _delay_ms(3500);
+        PORTD &= ~(1<<PD3); // equals (roughly) digitalWrite(7, LOW);
+        _delay_ms(3500);
+        wdt_reset();
+        set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
+        //  set_sleep_mode(SLEEP_MODE_PWR_SAVE); // choose power save mode
+        //  set_sleep_mode(SLEEP_MODE_STANDBY); // choose external standby power mode
+        //  set_sleep_mode(SLEEP_MODE_EXT_STANDBY); // choose external standby power mode
+        //  set_sleep_mode(SLEEP_MODE_IDLE); // did not work like this!
+        //  set_sleep_mode(SLEEP_MODE_ADC); // choose ADC noise reduction mode
+        //  sleep_bod_disable();  // optional brown-out detection switch off  
+        sleep_mode(); // sleep now!
+
+
         //vibrate_motor();
         //PORTD |= (1<<PD5);
         
