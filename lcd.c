@@ -25,6 +25,8 @@ void lcd_splash_screen() {
     snprintf(topbuf, 20, "EE459: SleepRight");
     status = i2c_io(0x50, NULL, 0, (uint8_t *)topbuf, 17, NULL, 0);
 
+    _delay_ms(1);
+
     // Move to bottom row 
     wbuf[0] = 0xFE;
     wbuf[1] = 0x45;
@@ -61,6 +63,35 @@ void lcd_clear() {
         serial_stringout(buf);
     }
     _delay_ms(3);
+}
+
+void lcd_clear_row(uint8_t row) {       // Note: row is 0 indexed!!
+    uint8_t wbuf[3];
+    wbuf[0] = 0xFE;
+    wbuf[1] = 0x45;
+    if(row==0) {
+        wbuf[2] = 0x00;
+    } else if(row==1) {
+        wbuf[2] = 0x40;
+    } else if(row==2) {
+        wbuf[2] = 0x14;
+    } else if(row==3) {
+        wbuf[2] = 0x54;
+    } else {
+        serial_stringout("Invalid row");
+    }
+    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+    if(status != 0) {
+        char buf[40];
+        snprintf(buf, 41, "unsuccessful lcd clear %2d \n", status);
+        serial_stringout(buf);
+    }
+    _delay_ms(1);
+
+    char clearbuf[20];
+    snprintf(clearbuf, 20, "                    ");
+    status = i2c_io(0x50, NULL, 0, (uint8_t *)clearbuf, 17, NULL, 0);
+
 }
 
 void lcd_rtc(uint8_t hour, uint8_t minutes){
@@ -131,4 +162,6 @@ void lcd_debug_print(char* buf, int len) {
         snprintf(buf, 41, "unsuccessful alarm print %2d \n", status);
         serial_stringout(buf);
     }
+
+    _delay_ms(1);
 }

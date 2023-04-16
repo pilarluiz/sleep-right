@@ -61,21 +61,15 @@ volatile uint8_t hours;
 uint8_t day;
 char* day_word;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-volatile int clock_index = 0;     // Used to decipher between setting hours and minutes
+volatile uint8_t clock_index;     // Used to differentiate between setting hours and minutes; 0 is hours 1 is minutes
 
-// Alarm variables
-volatile uint8_t alarm_hours;
-volatile uint8_t alarm_minutes;
-volatile int alarm_index = 0;    // Used to decipher between setting hours and minutes
 
-// User set wakeup time
-uint8_t wakeup_minutes_ones;
-uint8_t wakeup_minutes_tens;
-uint8_t wakeup_minutes;
-uint8_t wakeup_hours_ones;
-uint8_t wakeup_hours_tens;
-uint8_t wakeup_hours;
-uint8_t wakeup_day;         // not day of month but day of week 1-7, 1 being Sunday
+// Wakeup (alarm) variables
+volatile uint8_t wakeup_minutes;
+volatile uint8_t wakeup_hours;
+volatile uint8_t wakeup_day;         // not day of month but day of week 1-7, 1 being Sunday
+volatile uint8_t alarm_index = 0;    // Used to differentiate between setting hours and minutes; 0 is hours 1 is minutes
+volatile uint8_t alarm_set = 0;
 
 // Timer2 variables
 volatile int timer2_interrupt_count = 0;
@@ -268,7 +262,7 @@ void vibrate_motor() {
 //     TCCR2B |= (0b111 << CS20);  // Prescaler = 1024 for 16ms period
 // }
 
-// props to this dude: https://wolles-elektronikkiste.de/en/sleep-modes-and-power-management
+// thanks to this dude: https://wolles-elektronikkiste.de/en/sleep-modes-and-power-management
 void watchdogSetup(void){
   cli();
   wdt_reset();
@@ -289,34 +283,45 @@ int main(void)
     serial_init(ubrr); 
 
     _delay_ms(2000);
-    // adc_init();
-    // pulse_sensor_init();
-    // interrupt_init();
-    // sleep_stage_init();
+    adc_init();
+    pulse_sensor_init();
+    //interrupt_init();
+    sleep_stage_init();
     i2c_init(BDIV);
-    // encoder_init();
+    encoder_init();
 
     // Pull-Up Resistors & Inputs/Outputs
-    //PORTD |= (1 << RIGHT_BUTTON) | (1 << TOGGLE_BUTTON);
-    //PORTB |= (1 << SELECT_BUTTON) | (1 << LEFT_BUTTON);
+    PORTD |= (1 << RIGHT_BUTTON) | (1 << TOGGLE_BUTTON);
+    PORTB |= (1 << SELECT_BUTTON) | (1 << LEFT_BUTTON);
 
     // Variable Initializations
-    // state = SETCLOCK;
-    // hours = 0;
-    // minutes = 0; 
-    // alarm_hours = 0; 
-    // alarm_minutes = 0; 
+    state = SETCLOCK;
+    rtc_read();
+    clock_index=0;
+    wakeup_hours = 6; 
+    wakeup_minutes = 0; 
     
-    //lcd_splash_screen();
+    lcd_clear();
+    _delay_ms(1000);
+    lcd_splash_screen();
 
     // Initial time printout
-    //lcd_alarm(alarm_hours, alarm_minutes);
-    //lcd_rtc(hours, minutes);
+    lcd_alarm(wakeup_hours, wakeup_minutes);
+    lcd_rtc(hours, minutes);
+    // Underline cursor on
+    // uint8_t wbuf[2];
+    // wbuf[0] = 0xFE;
+    // wbuf[1] = 0x47;
+    // uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 2, NULL, 0);
+    // _delay_ms(1);
+
+    // state machine debug
+    uint8_t state_machine_debug=1;
 
     // enable global interrupts
-    // sei();
+    sei();
 
-    // haptic motor
+    //                  HAPTIC MOTOR
     //DDRD |= (1<<PD5);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
     //timer0_init();
     //sei();
@@ -326,7 +331,7 @@ int main(void)
     // DDRD |= (1<<PD3);
     // timer2_init();
 
-    // sleep mode test
+    //                  SLEEP MODE 
     //sei();
     // sleep_debug=1;
     // DDRD |= (1<<PD3);
@@ -337,14 +342,16 @@ int main(void)
     // SMCR &= ~((1<<SM2) | (1<<SM0));
     // SMCR |= ((1<<SM1));
     // Sleep Enable pin set to 1
-    
 
     // _delay_ms(2000);
     // PORTD |= (1<<PD3);
-    watchdogSetup();
-    DDRD |= (1<<PD3);
+    //watchdogSetup();
+    //DDRD |= (1<<PD3);
 
     while (1) {
+        
+
+        /*
         // watchdog timer interrupt power down mode demo
         PORTD |= (1<<PD3);  // equals (roughly) digitalWrite(7, HIGH);
         _delay_ms(3500);
@@ -359,101 +366,152 @@ int main(void)
         //  set_sleep_mode(SLEEP_MODE_ADC); // choose ADC noise reduction mode
         //  sleep_bod_disable();  // optional brown-out detection switch off  
         sleep_mode(); // sleep now!
-
-
-        //vibrate_motor();
-        //PORTD |= (1<<PD5);
+        */
         
-        // if (state == SETCLOCK) {
-        //     // Toggling
-        //     if (PIND & (1 << TOGGLE_BUTTON)) {
-        //         while (PIND & (1 << TOGGLE_BUTTON)) {}
-        //         serial_stringout("SETCLOCK: Toggle Pressed\n");
-        //         lcd_debug_print("SETCLK: TOGGLE", 14);
-        //         state = SETALARM; 
-        //     }
-
-        //     else if (PINB & (1 << SELECT_BUTTON)) {
-        //         while (PINB & (1 << SELECT_BUTTON)) {}
-        //         serial_stringout("SETCLOCK: Select Pressed\n");
-        //         lcd_debug_print("SETCLK: SELECT", 14);
-
-        //         // Irrelevant values now
-        //         uint8_t day = 0; 
-        //         uint8_t seconds = 0; 
+        if (state == SETCLOCK) {
+            // Toggling
+            if (!(PIND & (1 << TOGGLE_BUTTON))) {
+                while (!(PIND & (1 << TOGGLE_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETCLOCK: Toggle Pressed\n");
+                    lcd_debug_print("SETCLK: TOGGLE", 14);
+                }
                 
-        //         // Set RTC
-        //         uint8_t status = rtc_set(day, hours, minutes, seconds);
-        //         state = SLEEP; 
-        //     }
+                state = SETALARM; 
+                alarm_set=1;
+            }
 
-        //     // If right button pressed, increase alarm index
-        //     else if (PIND & (1 << RIGHT_BUTTON)) {
-        //         while (PIND & (1 << RIGHT_BUTTON)) {}
-        //         serial_stringout("SETCLOCK: Right Pressed\n");
-        //         lcd_debug_print("SETCLK: RIGHT ", 14);
-        //         clock_index = (clock_index + 1) % 2;
-        //     } 
-
-        //     else if (PINB & (1 << LEFT_BUTTON)) {
-        //         while (PINB & (1 << LEFT_BUTTON)) {}
-        //         serial_stringout("SETCLOCK: Left Pressed\n");
-        //         lcd_debug_print("SETCLK: LEFT  ", 14);
-        //         clock_index = (clock_index - 1) % 2;
-        //     }
-
-        //     if (changed) {
-        //         lcd_rtc(hours, minutes);
-        //     }
-        // } 
-        
-        // else if(state == SETALARM) {
-        //     // Toggling
-        //     if (PIND & (1 << TOGGLE_BUTTON)) {
-        //         while (PIND & (1 << TOGGLE_BUTTON)) {}
-        //         serial_stringout("SETALARM: Toggle Pressed\n");
-        //         state = SETCLOCK; 
-        //     }
-
-        //     else if (PINB & (1 << SELECT_BUTTON)) {
-        //         while (PINB & (1 << SELECT_BUTTON)) {}
-        //         serial_stringout("SETALARM: Select Pressed\n");
-
-        //         // Irrelevant values now
-        //         uint8_t day = 0; 
-        //         uint8_t seconds = 0; 
+            else if (!(PINB & (1 << SELECT_BUTTON))) {
+                while (!(PINB & (1 << SELECT_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETCLOCK: Select Pressed\n");
+                    lcd_debug_print("SETCLK: SELECT", 14);
+                }
                 
-        //         // Set RTC
-        //         uint8_t status = rtc_set(day, hours, minutes, seconds);
-        //         state = SLEEP; 
-        //     }
+                // Set RTC
+                uint8_t status = rtc_set(day, hours, minutes, seconds);
+                state = SETALARM; 
+                alarm_set=1;
+            }
 
-        //     // If right button pressed, increase alarm index
-        //     else if (PIND & (1 << RIGHT_BUTTON)) {
-        //         while (PIND & (1 << RIGHT_BUTTON)) {}
-        //         serial_stringout("SETALARM: Right Pressed\n");
-        //         alarm_index = (alarm_index + 1) % 2;
-        //     } 
+            // If right button pressed, increase clock index
+            else if (!(PIND & (1 << RIGHT_BUTTON))) {
+                while (!(PIND & (1 << RIGHT_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETCLOCK: Right Pressed\n");
+                    lcd_debug_print("SETCLK: RIGHT ", 14);
+                }
+                clock_index = (clock_index + 1) % 2;
+                // Move cursor
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x45;
+                wbuf[2] = 0x13;
+                uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
+            } 
 
-        //     else if (PINB & (1 << LEFT_BUTTON)) {
-        //         while (PINB & (1 << LEFT_BUTTON)) {}
-        //         serial_stringout("SETALARM: Left Pressed\n");
-        //         alarm_index = (alarm_index - 1) % 2;
-        //     }
+            else if (!(PINB & (1 << LEFT_BUTTON))) {
+                while (!(PINB & (1 << LEFT_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETCLOCK: Left Pressed\n");
+                    lcd_debug_print("SETCLK: LEFT  ", 14);
+                }
+                clock_index = (clock_index - 1) % 2;
+                // Move cursor
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x45;
+                wbuf[2] = 0x10;
+                uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
+            }
 
-        //     if (changed) {
-        //         lcd_alarm(alarm_hours, alarm_minutes);
-        //     }
-        // } 
+            // TODO: logic to change clock hours, minutes with encoder
+
+            if (changed) {
+                lcd_rtc(hours, minutes);
+            }
+        } 
         
-        // else if (state == SLEEP) {
-        //     // TODO
-        // } 
+        else if(state == SETALARM) {
+            // Toggling
+            if (!(PIND & (1 << TOGGLE_BUTTON))) {
+                while (!(PIND & (1 << TOGGLE_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETALARM: Toggle Pressed\n");
+                    lcd_debug_print("SETARM: TOGGLE", 14);
+                }
+                state = SETCLOCK; 
+                alarm_set=0;
+            }
+
+            else if (!(PINB & (1 << SELECT_BUTTON))) {
+                while (!(PINB & (1 << SELECT_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETALARM: Select Pressed\n");
+                    lcd_debug_print("SETARM: SELECT ", 14);
+                }
+                state = SLEEP;                // will need to uncomment later
+                alarm_set=0;
+            }
+
+            // If right button pressed, increase alarm index
+            else if (!(PIND & (1 << RIGHT_BUTTON))) {
+                while (!(PIND & (1 << RIGHT_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETALARM: Right Pressed\n");
+                    lcd_debug_print("SETARM: RIGHT ", 14);
+                }
+                alarm_index = (alarm_index + 1) % 2;
+                // Move cursor
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x45;
+                wbuf[2] = 0x53;
+                uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
+            } 
+
+            else if (!(PINB & (1 << LEFT_BUTTON))) {
+                while (!(PINB & (1 << LEFT_BUTTON))) {}
+                _delay_ms(10);
+                if(state_machine_debug) {
+                    serial_stringout("SETALARM: Left Pressed\n");
+                    lcd_debug_print("SETARM: LEFT  ", 14);
+                }
+                alarm_index = (alarm_index - 1) % 2;
+                // Move cursor
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x45;
+                wbuf[2] = 0x50;
+                uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
+            }
+
+            // TODO: logic to change wakeup_hours, wakeup_minutes, wakeup_day with encoder
+
+            if (changed) {
+                lcd_alarm(wakeup_hours, wakeup_minutes);
+            }
+        } 
         
-        // else if (state == WAKE)
-        // {
-        //     // TODO
-        // }
+        else if (state == SLEEP) {
+            // TODO
+        } 
+        
+        else if (state == WAKE)
+        {
+            // TODO
+        }
         
         // _delay_ms(500);
         // lcd_rtc(12,12);
