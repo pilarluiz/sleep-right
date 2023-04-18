@@ -40,7 +40,7 @@ void check_encoder_baran() {
     a = bits & (1 << PD2);
     b = bits & (1 << PD4);
 
-    uint8_t increment=0;
+    //uint8_t increment=0;
 
     if (old_state == 0) {
         if (a) {
@@ -84,67 +84,67 @@ void check_encoder_baran() {
         }
     }
 
-    if(increment) {
-        if(!alarm_set) {            // setting clock time       
-            if(!clock_index) {   
-                if(hours<23) {
-                    hours++;
-                } else {
-                    hours = 0;
-                }
-            } else {
-                if(minutes<59) {
-                    minutes++;
-                } else {
-                    minutes=0;
-                } 
-            }
-        } else {                    // setting alarm time
-            if(!alarm_index) {
-                if(wakeup_hours<23) {
-                    wakeup_hours++;
-                } else {
-                    wakeup_hours = 0;
-                }
-            } else {
-                if(wakeup_minutes<59) {
-                    wakeup_minutes++;
-                } else {
-                    wakeup_minutes=0;
-                } 
-            }
-        }
-    } else {
-        if(!alarm_set) {            // setting clock time       
-            if(!clock_index) {   
-                if(hours>0) {
-                    hours--;
-                } else {
-                    hours = 23;
-                }
-            } else {
-                if(minutes>0) {
-                    minutes--;
-                } else {
-                    minutes=59;
-                } 
-            }
-        } else {                    // setting alarm time
-            if(!alarm_index) {
-                if(wakeup_hours>0) {
-                    wakeup_hours--;
-                } else {
-                    wakeup_hours = 23;
-                }
-            } else {
-                if(wakeup_minutes>0) {
-                    wakeup_minutes--;
-                } else {
-                    wakeup_minutes=59;
-                } 
-            }
-        }
-    }
+    // if(increment) {
+    //     if(!alarm_set) {            // setting clock time       
+    //         if(!clock_index) {   
+    //             if(hours<23) {
+    //                 hours++;
+    //             } else {
+    //                 hours = 0;
+    //             }
+    //         } else {
+    //             if(minutes<59) {
+    //                 minutes++;
+    //             } else {
+    //                 minutes=0;
+    //             } 
+    //         }
+    //     } else {                    // setting alarm time
+    //         if(!alarm_index) {
+    //             if(wakeup_hours<23) {
+    //                 wakeup_hours++;
+    //             } else {
+    //                 wakeup_hours = 0;
+    //             }
+    //         } else {
+    //             if(wakeup_minutes<59) {
+    //                 wakeup_minutes++;
+    //             } else {
+    //                 wakeup_minutes=0;
+    //             } 
+    //         }
+    //     }
+    // } else {
+    //     if(!alarm_set) {            // setting clock time       
+    //         if(!clock_index) {   
+    //             if(hours>0) {
+    //                 hours--;
+    //             } else {
+    //                 hours = 23;
+    //             }
+    //         } else {
+    //             if(minutes>0) {
+    //                 minutes--;
+    //             } else {
+    //                 minutes=59;
+    //             } 
+    //         }
+    //     } else {                    // setting alarm time
+    //         if(!alarm_index) {
+    //             if(wakeup_hours>0) {
+    //                 wakeup_hours--;
+    //             } else {
+    //                 wakeup_hours = 23;
+    //             }
+    //         } else {
+    //             if(wakeup_minutes>0) {
+    //                 wakeup_minutes--;
+    //             } else {
+    //                 wakeup_minutes=59;
+    //             } 
+    //         }
+    //     }
+    // }
 
     if (new_state != old_state) {
         changed = 1;

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <avr/wdt.h>
 #include <avr/sleep.h>
+#include <avr/interrupt.h>
 
 #include "adc.h"
 #include "pulse_sensor.h"
@@ -76,7 +77,9 @@ volatile int timer2_interrupt_count = 0;
 volatile uint8_t sleep_debug = 0;
 
 // Rotary encoder variables
-volatile int changed = 0; 
+volatile uint8_t changed = 0; 
+volatile uint8_t increment=0;
+
 
 // Timer0 variables
 volatile int timer0_modulus;
@@ -207,32 +210,32 @@ void wake_up() {
     SMCR &= ~(1<<SE);
 }
 
-ISR(TIMER2_COMPA_vect) {
-    // Disable sleep enable
-    SMCR &= ~(1<<SE);
+// ISR(TIMER2_COMPA_vect) {
+//     // Disable sleep enable
+//     SMCR &= ~(1<<SE);
 
-    // with prescalar of 1024, maximum time before timer2 counts up is 1/(16,000,000/1024) * (2^8-1) = 0.01632s
-    timer2_interrupt_count++; 
+//     // with prescalar of 1024, maximum time before timer2 counts up is 1/(16,000,000/1024) * (2^8-1) = 0.01632s
+//     timer2_interrupt_count++; 
 
-    if(!sleep_debug) {
-        // to check real time clock every five minutes counter must reach 5*60/0.01632 = 18,383 times
-        if(timer2_interrupt_count >= 18383) {
-            timer2_interrupt_count = 0;
-            // Check to see if we're at wakeup time or 1.5 hours from wakeup time
-            check_state();
-        }
-    } else {
-         // test sleep mode
-         // 5/0.01632 = 306
-        if(timer2_interrupt_count >= 1000) {    //306
-            timer2_interrupt_count = 0;
-            // toggle motor
-            PORTD ^= (1<<PD3);
-        }
-    }
-    // Go back to sleep
-    SMCR |= (1<<SE); 
-}
+//     if(!sleep_debug) {
+//         // to check real time clock every five minutes counter must reach 5*60/0.01632 = 18,383 times
+//         if(timer2_interrupt_count >= 18383) {
+//             timer2_interrupt_count = 0;
+//             // Check to see if we're at wakeup time or 1.5 hours from wakeup time
+//             check_state();
+//         }
+//     } else {
+//          // test sleep mode
+//          // 5/0.01632 = 306
+//         if(timer2_interrupt_count >= 1000) {    //306
+//             timer2_interrupt_count = 0;
+//             // toggle motor
+//             PORTD ^= (1<<PD3);
+//         }
+//     }
+//     // Go back to sleep
+//     SMCR |= (1<<SE); 
+// }
 
 //TODO connect motor to OC0A (PB6); currently is connectd to wrong pin (OC2A)
 void timer0_init() {
@@ -271,8 +274,8 @@ void watchdogSetup(void){
   sei();
 }
 
-ISR(WDT_vect){//put in additional code here
-}
+// ISR(WDT_vect){//put in additional code here
+// }
 
 int main(void)
 {
@@ -320,6 +323,8 @@ int main(void)
 
     // enable global interrupts
     sei();
+
+    
 
     //                  HAPTIC MOTOR
     //DDRD |= (1<<PD5);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
@@ -434,6 +439,68 @@ int main(void)
             // TODO: logic to change clock hours, minutes with encoder
 
             if (changed) {
+                changed=0;
+                if(increment) {
+                    if(!alarm_set) {            // setting clock time       
+                        if(!clock_index) {   
+                            if(hours<23) {
+                                hours++;
+                            } else {
+                                hours = 0;
+                            }
+                        } else {
+                            if(minutes<59) {
+                                minutes++;
+                            } else {
+                                minutes=0;
+                            } 
+                        }
+                    } else {                    // setting alarm time
+                        if(!alarm_index) {
+                            if(wakeup_hours<23) {
+                                wakeup_hours++;
+                            } else {
+                                wakeup_hours = 0;
+                            }
+                        } else {
+                            if(wakeup_minutes<59) {
+                                wakeup_minutes++;
+                            } else {
+                                wakeup_minutes=0;
+                            } 
+                        }
+                    }
+                } else {
+                    if(!alarm_set) {            // setting clock time       
+                        if(!clock_index) {   
+                            if(hours>0) {
+                                hours--;
+                            } else {
+                                hours = 23;
+                            }
+                        } else {
+                            if(minutes>0) {
+                                minutes--;
+                            } else {
+                                minutes=59;
+                            } 
+                        }
+                    } else {                    // setting alarm time
+                        if(!alarm_index) {
+                            if(wakeup_hours>0) {
+                                wakeup_hours--;
+                            } else {
+                                wakeup_hours = 23;
+                            }
+                        } else {
+                            if(wakeup_minutes>0) {
+                                wakeup_minutes--;
+                            } else {
+                                wakeup_minutes=59;
+                            } 
+                        }
+                    }
+                }
                 lcd_rtc(hours, minutes);
             }
         } 
@@ -500,6 +567,68 @@ int main(void)
             // TODO: logic to change wakeup_hours, wakeup_minutes, wakeup_day with encoder
 
             if (changed) {
+                changed = 0;
+                if(increment) {
+                    if(!alarm_set) {            // setting clock time       
+                        if(!clock_index) {   
+                            if(hours<23) {
+                                hours++;
+                            } else {
+                                hours = 0;
+                            }
+                        } else {
+                            if(minutes<59) {
+                                minutes++;
+                            } else {
+                                minutes=0;
+                            } 
+                        }
+                    } else {                    // setting alarm time
+                        if(!alarm_index) {
+                            if(wakeup_hours<23) {
+                                wakeup_hours++;
+                            } else {
+                                wakeup_hours = 0;
+                            }
+                        } else {
+                            if(wakeup_minutes<59) {
+                                wakeup_minutes++;
+                            } else {
+                                wakeup_minutes=0;
+                            } 
+                        }
+                    }
+                } else {
+                    if(!alarm_set) {            // setting clock time       
+                        if(!clock_index) {   
+                            if(hours>0) {
+                                hours--;
+                            } else {
+                                hours = 23;
+                            }
+                        } else {
+                            if(minutes>0) {
+                                minutes--;
+                            } else {
+                                minutes=59;
+                            } 
+                        }
+                    } else {                    // setting alarm time
+                        if(!alarm_index) {
+                            if(wakeup_hours>0) {
+                                wakeup_hours--;
+                            } else {
+                                wakeup_hours = 23;
+                            }
+                        } else {
+                            if(wakeup_minutes>0) {
+                                wakeup_minutes--;
+                            } else {
+                                wakeup_minutes=59;
+                            } 
+                        }
+                    }
+                }
                 lcd_alarm(wakeup_hours, wakeup_minutes);
             }
         } 
