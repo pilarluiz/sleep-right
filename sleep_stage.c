@@ -2,6 +2,16 @@
 
 // TODO: Create tests for sleep stages
 
+// fucntion
+
+// for (i = 0; i < 30; ) 
+//      BPM = 30 // DEEP
+// for (i = 0 ; i < 30)
+//      BPM = 40 //
+// for (i = 0; i < 30) 
+//      BPM = 50
+
+
 void sleep_stage_init()
 {
     last_stage = AWAKE;
@@ -35,9 +45,10 @@ uint8_t sleep_stage()
 
     // Sleep stage has changed
     if (last_stage != current_stage) {
-        if ((last_stage == DEEP_SLEEP) || (last_stage == LIGHT_SLEEP)) {
+        last_stage = current_stage; 
+
+        if (last_stage == LIGHT_SLEEP) {
             stage_change = 1; 
-            last_stage = current_stage; 
         }
     } else {
         stage_change = 0; 

@@ -80,6 +80,7 @@ volatile uint8_t sleep_debug = 0;
 // Rotary encoder variables
 volatile uint8_t changed = 0; 
 volatile uint8_t increment=0;
+uint8_t DEMO = 1; 
 
 
 // Timer0 variables
@@ -113,53 +114,9 @@ void enter_idle_sleep_mode() {              // does order of sleep mode enable s
     SMCR |= (1<<SE);
 }
 
-// TODO: Sleep mode functions
-int check_state() {
-    if(!rtc_read()) {       // no rtc error
-        // at wakeup time? Then must wake up
-        if( check_if_at_wakeup() ) {      // if within at wakeup time, must wakeup regardless of sleep cycle
-            wake_up();
-            return 1;
-        } else if(check_if_one_cycle_from_wakeup()) {      // if 1 sleep cycle (1.5 hour) of wakeup, check sleep cycle
-            // check if there is potentially an early wakeup
-            // Determine current stage of sleep
-            uint8_t stage = sleep_stage();
-            if (stage == LIGHT_SLEEP) {
-                serial_stringout("STAGE: LIGHT\n"); 
-            } else if (stage == DEEP_SLEEP) {
-                serial_stringout("STAGE: DEEP\n"); 
-            } else if (stage == REM_SLEEP) {
-                serial_stringout("STAGE: REM\n"); 
-            } else {
-                serial_stringout("STAGE: AWAKE\n"); 
-            }
 
-            if(stage_changed()) {    // Wake up when changing sleep stages
-                wake_up();
-                return 1;
-            } else {
-                return 0; 
-            }
-        } else {
-            return 0;
-        }
-    } else {
-        // Error reading RTC
-        return -1;
-    }
-}
 
-// TODO: check for day as well
 uint8_t check_if_at_wakeup() {
-    //int day_diff = wakeup_day - day;
-    // check if within 5 minutes of wakeup time
-    // if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) && (day_diff==0)) ||                 
-    //     ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55) && (day_diff==0)) ||         
-    //     ((abs(wakeup_hours-hours) == 24) && (abs(wakeup_minutes-minutes) >= 55) && ((day_diff==1)||(day_diff==-6)))) {
-    //     return 1;
-    // } else {
-    //     return 0;
-    // }
     if((wakeup_hours == hours) && (wakeup_minutes == minutes)) {
         return 1;
     } else {
@@ -184,22 +141,14 @@ CASE 3:
 22:30	to 	23:59
 */
 
-// TODO: check for day
 uint8_t check_if_one_cycle_from_wakeup() {
     int total_minutes = 60*hours+minutes;
     int total_wakeup_minutes = 60*wakeup_hours+wakeup_minutes;
     int diff = (total_wakeup_minutes-total_minutes) % (24*60);
-    // int day_diff = wakeup_day - day;
-
-
-
 
     if((diff<=90)) {        // within 1 sleep cycle of wakeup time
         return 1;
     }
-    //  else if((total_wakeup_minutes>=0) && (total_wakeup_minutes<=89) && ((-1*diff)<=1350) && ((day_diff==1) || (day_diff==-6))) {         // accounts for case 3
-    //     return 1;
-    // } 
     else {
         return 0;
     }
@@ -338,6 +287,11 @@ int main(void)
 
     // enable global interrupts
     sei();
+
+    // DEMO variables
+    uint8_t DEMO_DEEP_count = 0; 
+    uint8_t DEMO_LIGHT_count = 0; 
+    uint8_t DEMO_REM_count = 0; 
 
     
 
@@ -666,7 +620,9 @@ int main(void)
                 lcd_rtc(hours, minutes);
             }
             // within an hour and a half of wakeup time
+
             if (check_if_at_wakeup() || stage_changed()) {
+                stage_change = 0; 
                 lcd_wakeup("GOOD MORNING :)", 15);
                 // Vibrate motor, etc
                 wake_up();
@@ -675,21 +631,56 @@ int main(void)
 
             // Print BPM
             if (saw_start_of_beat() && (state != ALARM)) {
-                char buf[30];
-                snprintf(buf, 31, "BPM: '%2d'\n", BPM);
-                serial_stringout(buf); 
+                if (!DEMO) {
+                    char buf[30];
+                    snprintf(buf, 31, "BPM: '%2d'\n", BPM);
+                    serial_stringout(buf); 
 
-                lcd_bpm(BPM);
+                    lcd_bpm(BPM);
 
-                // Add BPM to history array
-                bpm_history[bpm_history_idx++] = BPM;
-                bpm_history_idx %= 30;
+                    // Add BPM to history array
+                    bpm_history[bpm_history_idx++] = BPM;
+                    bpm_history_idx %= 30;
+                } 
+                
+                // Demo code with fake BPM data
+                else {
+                    uint8_t DEMO_BPM; 
+                    if(DEMO_DEEP_count < 30) {
+                        DEMO_DEEP_count++;
+                        if(DEMO_DEEP_count % 2) {
+                            DEMO_BPM = 42;
+                        } else {
+                            DEMO_BPM = 41;
+                        }
+                    } else if (DEMO_LIGHT_count < 30) {
+                        DEMO_LIGHT_count++;
+                        if(DEMO_LIGHT_count % 2) {
+                            DEMO_BPM = 47;
+                        } else {
+                            DEMO_BPM = 48;
+                        }
+                    } else if (DEMO_REM_count < 30) {
+                        DEMO_REM_count++;
+                        if(DEMO_REM_count % 2) {
+                            DEMO_BPM = 55;
+                        } else {
+                            DEMO_BPM = 56;
+                        }
+                    } else {
+                        DEMO_BPM = 60;
+                    }
+
+                    bpm_history[bpm_history_idx++] = DEMO_BPM;
+                    bpm_history_idx %= 30;
+
+                    lcd_bpm(DEMO_BPM);
+                }
 
                 uint8_t stage = sleep_stage();
                 lcd_stage(stage);
             }  
 
-            // uint8_t status = check_state();
         } else if (state == ALARM) {
             uint8_t rtc_status = rtc_read();
             if(time_changed) {
