@@ -36,6 +36,9 @@ uint8_t rtc_read() {
         serial_stringout(buf);
         return status;
     }
+
+    uint8_t old_hours = hours; 
+    uint8_t old_minutes = minutes; 
     
     seconds_ones = rbuf[0] & (0x0F);
     seconds_tens = (rbuf[0] & (0x70)) >> 4;
@@ -53,6 +56,10 @@ uint8_t rtc_read() {
 
     snprintf(buf, 41, "Time: %02d:%02d:%02d ", hours, minutes, seconds);
     serial_stringout(buf);
+
+    if ((old_hours != hours) || (old_minutes != minutes)) {
+        time_changed = 1; 
+    }
 
     return status;
 }

@@ -35,8 +35,10 @@ uint8_t sleep_stage()
 
     // Sleep stage has changed
     if (last_stage != current_stage) {
-        stage_change = 1; 
-        last_stage = current_stage; 
+        if ((last_stage == DEEP_SLEEP) || (last_stage == LIGHT_SLEEP)) {
+            stage_change = 1; 
+            last_stage = current_stage; 
+        }
     } else {
         stage_change = 0; 
     }
