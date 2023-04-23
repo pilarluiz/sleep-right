@@ -72,8 +72,8 @@ volatile uint8_t wakeup_day;         // not day of month but day of week 1-7, 1 
 volatile uint8_t alarm_index = 0;    // Used to differentiate between setting hours and minutes; 0 is hours 1 is minutes
 volatile uint8_t alarm_set = 0;
 
-// Timer2 variables
-volatile int timer2_interrupt_count = 0;
+// Watchdog Timer Variables
+volatile int wdt_interrupt_count = 0;
 volatile uint8_t sleep_debug = 0;
 
 // Rotary encoder variables
@@ -85,32 +85,32 @@ volatile uint8_t increment=0;
 volatile int timer0_modulus;
 
 // TODO
-void timer_2_sleep_init() {
+// void timer_2_sleep_init() {
     
-    // reset interrupt counter
-    timer2_interrupt_count = 0;
-    // CTC mode
-    //TCCR2A |= ((1<<) | (1<<));
-    TCCR2B |= (1<<WGM22);
-    // Enable CTC interrupt
-    TIMSK2 |= (1<<OCIE2A);
-    // Trigger interrupt at maximum counter value
-    OCR2A = 255;
-    // Switching timer 2 to asynchronous for sleep mode; take some precautions (see p.201 on atmega datasheet)
-    TCNT2=0;
-    // global interrupts
-    sei();
-}
+//     // reset interrupt counter
+//     timer2_interrupt_count = 0;
+//     // CTC mode
+//     //TCCR2A |= ((1<<) | (1<<));
+//     TCCR2B |= (1<<WGM22);
+//     // Enable CTC interrupt
+//     TIMSK2 |= (1<<OCIE2A);
+//     // Trigger interrupt at maximum counter value
+//     OCR2A = 255;
+//     // Switching timer 2 to asynchronous for sleep mode; take some precautions (see p.201 on atmega datasheet)
+//     TCNT2=0;
+//     // global interrupts
+//     sei();
+// }
 
-void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
-    timer_2_sleep_init();
-    // Set prescalar for timer2, start timer
-    TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
-    // Idle sleep mode -> SM2:0 = 000
-    SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
-    // Sleep Enable pin set to 1
-    SMCR |= (1<<SE);
-}
+// void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
+//     timer_2_sleep_init();
+//     // Set prescalar for timer2, start timer
+//     TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
+//     // Idle sleep mode -> SM2:0 = 000
+//     SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
+//     // Sleep Enable pin set to 1
+//     SMCR |= (1<<SE);
+// }
 
 // TODO: Sleep mode functions
 int check_state() {
@@ -266,7 +266,7 @@ void vibrate_motor() {
 // }
 
 // thanks to this dude: https://wolles-elektronikkiste.de/en/sleep-modes-and-power-management
-void watchdogSetup(void){
+void watchdog_init(void){
   cli();
   wdt_reset();
   WDTCSR |= (1<<WDCE) | (1<<WDE);
@@ -274,8 +274,25 @@ void watchdogSetup(void){
   sei();
 }
 
-// ISR(WDT_vect){//put in additional code here
-// }
+ISR(WDT_vect){//put in additional code here
+    // Turn off watchdog timer
+
+
+    // watchdog goes off every 8s, for 5 minutes 5*60/8 = 37
+    wdt_interrupt_count++; 
+
+    if(!sleep_debug) {
+        // to check real time clock every five minutes counter must reach 5*60/8 = 37
+        if(wdt_interrupt_count >= 37) {
+            wdt_interrupt_count = 0;
+            // Check to see if we're at wakeup time or 1.5 hours from wakeup time
+            check_state();
+        }
+    } else {
+        PORTD ^= (1<<PD3);
+    }
+
+}
 
 int main(void)
 {
@@ -319,7 +336,7 @@ int main(void)
     // _delay_ms(1);
 
     // state machine debug
-    uint8_t state_machine_debug=1;
+    uint8_t state_machine_debug=0;
 
     // enable global interrupts
     sei();
@@ -350,29 +367,24 @@ int main(void)
 
     // _delay_ms(2000);
     // PORTD |= (1<<PD3);
-    //watchdogSetup();
-    //DDRD |= (1<<PD3);
+    watchdog_init();
+    sleep_debug = 1;
+    DDRD |= (1<<PD3);
 
     while (1) {
         
 
-        /*
+        
         // watchdog timer interrupt power down mode demo
-        PORTD |= (1<<PD3);  // equals (roughly) digitalWrite(7, HIGH);
-        _delay_ms(3500);
-        PORTD &= ~(1<<PD3); // equals (roughly) digitalWrite(7, LOW);
-        _delay_ms(3500);
+        // PORTD |= (1<<PD3);
+        // _delay_ms(3500);
+        // PORTD &= ~(1<<PD3);
+        // _delay_ms(3500);
         wdt_reset();
         set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
-        //  set_sleep_mode(SLEEP_MODE_PWR_SAVE); // choose power save mode
-        //  set_sleep_mode(SLEEP_MODE_STANDBY); // choose external standby power mode
-        //  set_sleep_mode(SLEEP_MODE_EXT_STANDBY); // choose external standby power mode
-        //  set_sleep_mode(SLEEP_MODE_IDLE); // did not work like this!
-        //  set_sleep_mode(SLEEP_MODE_ADC); // choose ADC noise reduction mode
-        //  sleep_bod_disable();  // optional brown-out detection switch off  
         sleep_mode(); // sleep now!
-        */
         
+        /*
         if (state == SETCLOCK) {
             // Toggling
             if (!(PIND & (1 << TOGGLE_BUTTON))) {
@@ -634,7 +646,7 @@ int main(void)
         } 
         
         else if (state == SLEEP) {
-            // TODO
+            // TODO: sleep mode, figure out how to turn off LCD backlight
         } 
         
         else if (state == WAKE)
@@ -642,10 +654,7 @@ int main(void)
             // TODO
         }
         
-        // _delay_ms(500);
-        // lcd_rtc(12,12);
-        // lcd_alarm(8,3);
-        // _delay_ms(2000);
+        */
         
         
         /*
