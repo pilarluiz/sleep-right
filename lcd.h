@@ -6,3 +6,6 @@ void lcd_clear_row(uint8_t row);
 void lcd_rtc(uint8_t hour, uint8_t minutes);
 void lcd_alarm(uint8_t hour, uint8_t minutes);
 void lcd_debug_print(char* buf, int len);
+void lcd_bpm(uint8_t beats);
+void lcd_stage(uint8_t stage);
+void lcd_wakeup(char* buf, int len);

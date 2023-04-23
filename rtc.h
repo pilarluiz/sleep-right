@@ -15,3 +15,4 @@ extern volatile uint8_t hours;
 extern uint8_t day;
 extern char* day_word;
 extern char* days[7];
+extern int time_changed; 

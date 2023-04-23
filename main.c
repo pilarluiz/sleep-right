@@ -33,7 +33,7 @@ void enter_idle_sleep_mode(void);
 // void timer_2_init(void);
 void timer0_init(void);
 void vibrate_motor(void);
-void wake_up(void);
+void exit_sleepmode(void);
 
 // Determine real time clock baud rate
 #define FOSC 7372800    // CPU clock freq
@@ -46,23 +46,24 @@ void wake_up(void);
 #define SELECT_BUTTON PB0
 
 // State Machine
-enum states {SETCLOCK, SETALARM, SLEEP, WAKE, DONE};
+enum states {SETCLOCK, SETALARM, SLEEP, WAKE, ALARM, DONE};
 volatile int state;
 
 // RTC global variables
 uint8_t seconds_ones;
 uint8_t seconds_tens;
-uint8_t seconds;
+uint8_t seconds = 0;
 uint8_t minutes_ones;
 uint8_t minutes_tens;
 volatile uint8_t minutes;
 uint8_t hours_ones;
 uint8_t hours_tens;
 volatile uint8_t hours;
-uint8_t day;
+uint8_t day = 0;
 char* day_word;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 volatile uint8_t clock_index;     // Used to differentiate between setting hours and minutes; 0 is hours 1 is minutes
+int time_changed = 0; 
 
 
 // Wakeup (alarm) variables
@@ -75,10 +76,12 @@ volatile uint8_t alarm_set = 0;
 // Watchdog Timer Variables
 volatile int wdt_interrupt_count = 0;
 volatile uint8_t sleep_debug = 0;
+volatile uint8_t wake_init = 0;
 
 // Rotary encoder variables
 volatile uint8_t changed = 0; 
 volatile uint8_t increment=0;
+uint8_t DEMO = 1; 
 
 
 // Timer0 variables
@@ -112,49 +115,10 @@ volatile int timer0_modulus;
 //     SMCR |= (1<<SE);
 // }
 
-// TODO: Sleep mode functions
-int check_state() {
-    if(!rtc_read()) {       // no rtc error
-        // at wakeup time? Then must wake up
-        if( check_if_at_wakeup() ) {      // if within at wakeup time, must wakeup regardless of sleep cycle
-            wake_up();
-            return 1;
-        } else if(check_if_one_cycle_from_wakeup()) {      // if 1 sleep cycle (1.5 hour) of wakeup, check sleep cycle
-            // check if there is potentially an early wakeup
-            // Determine current stage of sleep
-            uint8_t stage = sleep_stage();
-            if (stage == LIGHT_SLEEP) {
-                serial_stringout("STAGE: LIGHT\n"); 
-            } else if (stage == DEEP_SLEEP) {
-                serial_stringout("STAGE: DEEP\n"); 
-            } else if (stage == REM_SLEEP) {
-                serial_stringout("STAGE: REM\n"); 
-            } else {
-                serial_stringout("STAGE: AWAKE\n"); 
-            }
 
-            if(stage_changed()) {    // Wake up when changing sleep stages
-                wake_up();
-                return 1;
-            } else {
-                return 0; 
-            }
-        } else {
-            return 0;
-        }
-    } else {
-        // Error reading RTC
-        return -1;
-    }
-}
 
-// TODO: check for day as well
 uint8_t check_if_at_wakeup() {
-    int day_diff = wakeup_day - day;
-    // check if within 5 minutes of wakeup time
-    if( (wakeup_hours == hours && (abs(wakeup_minutes-minutes) <= 5) && (day_diff==0)) ||                 
-        ((abs(wakeup_hours-hours) == 1) && (abs(wakeup_minutes-minutes) >= 55) && (day_diff==0)) ||         
-        ((abs(wakeup_hours-hours) == 24) && (abs(wakeup_minutes-minutes) >= 55) && ((day_diff==1)||(day_diff==-6)))) {
+    if((wakeup_hours == hours) && (wakeup_minutes == minutes)) {
         return 1;
     } else {
         return 0;
@@ -178,17 +142,15 @@ CASE 3:
 22:30	to 	23:59
 */
 
-// TODO: check for day
 uint8_t check_if_one_cycle_from_wakeup() {
     int total_minutes = 60*hours+minutes;
     int total_wakeup_minutes = 60*wakeup_hours+wakeup_minutes;
-    int diff = total_wakeup_minutes-total_minutes;
-    int day_diff = wakeup_day - day;
-    if((diff<=90) && (day_diff==0)) {        // within 1 sleep cycle of wakeup time
+    int diff = (total_wakeup_minutes-total_minutes) % (24*60);
+
+    if((diff<=90)) {        // within 1 sleep cycle of wakeup time
         return 1;
-    } else if((total_wakeup_minutes>=0) && (total_wakeup_minutes<=89) && ((-1*diff)<=1350) && ((day_diff==1) || (day_diff==-6))) {         // accounts for case 3
-        return 1;
-    } else {
+    }
+    else {
         return 0;
     }
 }
@@ -204,11 +166,15 @@ uint8_t abs(uint8_t value) {
 void wake_up() {
     serial_stringout("at wakeup time \n");
     vibrate_motor();
+}
+
+void exit_sleepmode() {
     // turn timer off
     TCCR2B &= ~ ((1<<CS00) | (1<<CS01) | (1<<CS02));
     // turn sleep mode off
     SMCR &= ~(1<<SE);
 }
+
 
 // ISR(TIMER2_COMPA_vect) {
 //     // Disable sleep enable
@@ -237,24 +203,29 @@ void wake_up() {
 //     SMCR |= (1<<SE); 
 // }
 
-//TODO connect motor to OC0A (PB6); currently is connectd to wrong pin (OC2A)
 void timer0_init() {
     TCCR0A |= (0b11 << WGM00);  // Set for Fast PWM mode using OCR0A for the modulus
     TCCR0A |= (0b10 << COM0B0); // Set to turn OC0B (PB5) on at 0x00, off when TCNT0=OCR0A    
-    timer0_modulus = 128;
+    timer0_modulus = 255;
     OCR0A = timer0_modulus;     // Initial PWM pulse width
-    TIMSK0 |= (1 << TOIE0);     // Enable Timer0 overflow interrupt 
+    
+    // TIMSK0 |= (1 << TOIE0);     // Enable Timer0 overflow interrupt 
 }
 
 void vibrate_motor() {
-    TCCR0B |= (0b111 << CS00);  // 256 prescalar; turn on timer0
-    int cycle_counter = 0;
-    while(cycle_counter < 25) {     // vibrate motor for 25*200ms = 5s
-        cycle_counter++;
-        _delay_ms(200);
-        timer0_modulus+=4;          
-        OCR0A = timer0_modulus;     // increase duty cycle of PWM
-    }
+    // TCCR0B |= (0b111 << CS00);  // 256 prescalar; turn on timer0
+    // int cycle_counter = 0;
+    // while(cycle_counter < 250) {     // vibrate motor for 25*200ms = 5s
+    //     cycle_counter++;
+    //     if(!(cycle_counter%10)){
+    //         timer0_modulus+=4;          
+    //         OCR0A = timer0_modulus;     // increase duty cycle of PWM
+    //     }
+    // }
+    PORTD |= (1<<PD5);
+    _delay_ms(5000);
+    PORTD &= ~(1<<PD5);
+
 }
 
 // void timer2_pwm_init(void)
@@ -275,18 +246,23 @@ void watchdog_init(void){
 }
 
 ISR(WDT_vect){//put in additional code here
-    // Turn off watchdog timer
-
-
+    // Toggle pin to track sleep mode interrupts
+    PORTD ^= (1<<PD3);
     // watchdog goes off every 8s, for 5 minutes 5*60/8 = 37
     wdt_interrupt_count++; 
 
     if(!sleep_debug) {
         // to check real time clock every five minutes counter must reach 5*60/8 = 37
-        if(wdt_interrupt_count >= 37) {
+        //if(wdt_interrupt_count >= 37) {
+        if(wdt_interrupt_count >= 2) {      // check rtc every 16 seconds for debug
             wdt_interrupt_count = 0;
             // Check to see if we're at wakeup time or 1.5 hours from wakeup time
-            check_state();
+            if ( check_if_at_wakeup() || check_if_one_cycle_from_wakeup()) {
+                state = WAKE; 
+                wake_init=1;
+                
+                // exit_sleepmode();
+            }
         }
     } else {
         PORTD ^= (1<<PD3);
@@ -305,8 +281,6 @@ int main(void)
     _delay_ms(2000);
     adc_init();
     pulse_sensor_init();
-    //interrupt_init();
-    sleep_stage_init();
     i2c_init(BDIV);
     encoder_init();
 
@@ -316,15 +290,24 @@ int main(void)
 
     // Variable Initializations
     state = SETCLOCK;
-    rtc_read();
+    //rtc_read();
     clock_index=0;
     wakeup_hours = 6; 
     wakeup_minutes = 0; 
     
+    // NEW: turn on LED brightness
+    uint8_t wbuf[3];
+    wbuf[0] = 0xFE;
+    wbuf[1] = 0x53;
+    wbuf[2] = 0x08;
+    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+    _delay_ms(1);
+
     lcd_clear();
     _delay_ms(1000);
     lcd_splash_screen();
 
+    rtc_read();
     // Initial time printout
     lcd_alarm(wakeup_hours, wakeup_minutes);
     lcd_rtc(hours, minutes);
@@ -341,50 +324,49 @@ int main(void)
     // enable global interrupts
     sei();
 
+    // DEMO variables
+    uint8_t DEMO_DEEP_count = 0; 
+    uint8_t DEMO_LIGHT_count = 0; 
+    uint8_t DEMO_REM_count = 0; 
+
     
 
     //                  HAPTIC MOTOR
-    //DDRD |= (1<<PD5);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
+    DDRD |= (1<<PD5);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
     //timer0_init();
     //sei();
-    //TCCR0B |= (0b100 << CS00);  // 256 prescalar; turn on timer0
+    //TCCR0B |= (0b010 << CS00);  // 256 prescalar; turn on timer0
+
 
     // timer2 pwm debug
     // DDRD |= (1<<PD3);
     // timer2_init();
 
     //                  SLEEP MODE 
-    //sei();
-    // sleep_debug=1;
-    // DDRD |= (1<<PD3);
-    // enter_idle_sleep_mode();
 
-    // DDRD |= (1<<PD3);
-    // SMCR |= (1<<SE);
-    // SMCR &= ~((1<<SM2) | (1<<SM0));
-    // SMCR |= ((1<<SM1));
-    // Sleep Enable pin set to 1
-
-    // _delay_ms(2000);
-    // PORTD |= (1<<PD3);
     watchdog_init();
-    sleep_debug = 1;
+    sleep_debug = 0;
     DDRD |= (1<<PD3);
+    // wdt_reset();
+    // set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
+    // sleep_mode(); // sleep now!
 
+    //rtc_set(1, 12, 39, 1);
     while (1) {
+        // rtc_read();
+        // _delay_ms(1000);
         
 
-        
         // watchdog timer interrupt power down mode demo
         // PORTD |= (1<<PD3);
         // _delay_ms(3500);
         // PORTD &= ~(1<<PD3);
         // _delay_ms(3500);
-        wdt_reset();
-        set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
-        sleep_mode(); // sleep now!
+        // wdt_reset();
+        // set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
+        // sleep_mode(); // sleep now!
         
-        /*
+        
         if (state == SETCLOCK) {
             // Toggling
             if (!(PIND & (1 << TOGGLE_BUTTON))) {
@@ -409,8 +391,15 @@ int main(void)
                 
                 // Set RTC
                 uint8_t status = rtc_set(day, hours, minutes, seconds);
-                state = SETALARM; 
+                state = SLEEP; 
                 alarm_set=1;
+                // Turn off LCD display backlight
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x53;
+                wbuf[2] = 0x01;
+                status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
             }
 
             // If right button pressed, increase clock index
@@ -448,9 +437,9 @@ int main(void)
                 _delay_ms(1);
             }
 
-            // TODO: logic to change clock hours, minutes with encoder
-
             if (changed) {
+                cli();
+                //serial_stringout("encoder changed");
                 changed=0;
                 if(increment) {
                     if(!alarm_set) {            // setting clock time       
@@ -514,6 +503,12 @@ int main(void)
                     }
                 }
                 lcd_rtc(hours, minutes);
+                // if(state_machine_debug) {
+                //     char buf[40];
+                //     snprintf(buf, 41, "CLOCK TIME: %02d:%02d ", hours, minutes);
+                //     serial_stringout(buf);
+                // }
+                sei();
             }
         } 
         
@@ -537,8 +532,18 @@ int main(void)
                     serial_stringout("SETALARM: Select Pressed\n");
                     lcd_debug_print("SETARM: SELECT ", 14);
                 }
+                // set clock time
+                uint8_t status = rtc_set(day, hours, minutes, seconds);
                 state = SLEEP;                // will need to uncomment later
                 alarm_set=0;
+                // Turn off LCD display
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x53;
+                wbuf[2] = 0x01;
+                status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
+
             }
 
             // If right button pressed, increase alarm index
@@ -576,9 +581,9 @@ int main(void)
                 _delay_ms(1);
             }
 
-            // TODO: logic to change wakeup_hours, wakeup_minutes, wakeup_day with encoder
-
             if (changed) {
+                cli();
+                //serial_stringout("encoder changed");
                 changed = 0;
                 if(increment) {
                     if(!alarm_set) {            // setting clock time       
@@ -642,37 +647,178 @@ int main(void)
                     }
                 }
                 lcd_alarm(wakeup_hours, wakeup_minutes);
+                sei();
+                // if(state_machine_debug) {
+                //     char buf[40];
+                //     snprintf(buf, 41, "CLOCK TIME: %02d:%02d ", wakeup_hours, wakeup_minutes);
+                //     serial_stringout(buf);
+                // }
             }
         } 
         
         else if (state == SLEEP) {
-            // TODO: sleep mode, figure out how to turn off LCD backlight
+
+            // Initialize power down sleep mode
+            wdt_reset();
+            set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
+            sleep_mode(); // sleep now!
+            // Transition out of SLEEP mode
+            // if ( check_if_at_wakeup() || check_if_one_cycle_from_wakeup()) {
+            //     state = WAKE; 
+            //     interrupt_init();
+            //     sleep_stage_init();
+            //     // exit_sleepmode();
+            // }
+            
         } 
         
         else if (state == WAKE)
         {
-            // TODO
+            if(wake_init) {
+                wake_init = 0;
+                interrupt_init();
+                sleep_stage_init();
+                // Turn on LCD display
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x53;
+                wbuf[2] = 0x08;
+                uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
+            }
+            if(state_machine_debug) {
+                serial_stringout("WAKE");
+                lcd_debug_print("WAKE", 4);
+            }
+            uint8_t rtc_status = rtc_read();
+            if(time_changed) {
+                time_changed = 0; 
+                lcd_rtc(hours, minutes);
+            }
+            // within an hour and a half of wakeup time
+
+            if (check_if_at_wakeup() || stage_changed()) {
+                stage_change = 0; 
+                lcd_wakeup("GOOD MORNING :)", 15);
+                
+                state = ALARM;
+            }
+
+            // Print BPM
+            if (saw_start_of_beat() && (state != ALARM)) {
+                if (!DEMO) {
+                    char buf[30];
+                    snprintf(buf, 31, "BPM: '%2d'\n", BPM);
+                    serial_stringout(buf); 
+
+                    lcd_bpm(BPM);
+
+                    // Add BPM to history array
+                    bpm_history[bpm_history_idx++] = BPM;
+                    bpm_history_idx %= 30;
+                } 
+                
+                // Demo code with fake BPM data
+                else {
+                    uint8_t DEMO_BPM; 
+                    if(DEMO_DEEP_count < 30) {
+                        DEMO_DEEP_count++;
+                        if(DEMO_DEEP_count % 2) {
+                            DEMO_BPM = 42;
+                        } else {
+                            DEMO_BPM = 41;
+                        }
+                    } else if (DEMO_LIGHT_count < 30) {
+                        DEMO_LIGHT_count++;
+                        if(DEMO_LIGHT_count % 2) {
+                            DEMO_BPM = 47;
+                        } else {
+                            DEMO_BPM = 48;
+                        }
+                    } else if (DEMO_REM_count < 30) {
+                        DEMO_REM_count++;
+                        if(DEMO_REM_count % 2) {
+                            DEMO_BPM = 55;
+                        } else {
+                            DEMO_BPM = 56;
+                        }
+                    } else {
+                        DEMO_BPM = 60;
+                    }
+
+                    bpm_history[bpm_history_idx++] = DEMO_BPM;
+                    bpm_history_idx %= 30;
+
+                    lcd_bpm(DEMO_BPM);
+                }
+
+                uint8_t stage = sleep_stage();
+                lcd_stage(stage);
+            }  
+
+        } else if (state == ALARM) {
+            // TODO: Turn on haptic motor
+            // Vibrate motor, etc
+            wake_up();
+
+            if(state_machine_debug) {
+                serial_stringout("ALARM");
+                lcd_debug_print("ALARM", 5);
+            }
+
+
+            uint8_t rtc_status = rtc_read();
+            if(time_changed) {
+                time_changed = 0; 
+                lcd_rtc(hours, minutes);
+            }
+            // If any button is pressed, go to done
+            if (!(PIND & (1 << TOGGLE_BUTTON))) {
+                while (!(PIND & (1 << TOGGLE_BUTTON))) {}
+                _delay_ms(10);
+                state = DONE;
+            }
+
+            else if (!(PINB & (1 << SELECT_BUTTON))) {
+                while (!(PINB & (1 << SELECT_BUTTON))) {}
+                _delay_ms(10);
+                state = DONE;
+            }
+
+            // If right button pressed, increase alarm index
+            else if (!(PIND & (1 << RIGHT_BUTTON))) {
+                while (!(PIND & (1 << RIGHT_BUTTON))) {}
+                _delay_ms(10);
+                state = DONE;
+            } 
+
+            else if (!(PINB & (1 << LEFT_BUTTON))) {
+                while (!(PINB & (1 << LEFT_BUTTON))) {}
+                _delay_ms(10);
+                state = DONE;
+            }
+
+        } else if (state == DONE) {
+            lcd_debug_print("Press SEL to Restart", 20);
+            
+            uint8_t rtc_status = rtc_read();
+            if(time_changed) {
+                time_changed = 0; 
+                lcd_rtc(hours, minutes);
+            }
+
+            if (!(PINB & (1 << SELECT_BUTTON))) {
+                while (!(PINB & (1 << SELECT_BUTTON))) {}
+                _delay_ms(10);
+                alarm_set=1;
+                state = SETALARM;
+                lcd_debug_print("                    ", 20);
+            }
         }
         
-        */
-        
-        
-        /*
-        if (saw_start_of_beat()) {
-            char buf[30];
-            snprintf(buf, 31, "BPM: '%2d'\n", BPM);
-            serial_stringout(buf); 
-
-            // Add BPM to history array
-            bpm_history[bpm_history_idx++] = BPM;
-            bpm_history_idx %= 30;
-
-            uint8_t stage = sleep_stage();
-            // TODO: Do something with sleep stage (print to LCD, etc. )
-        }  
-        */
-
         _delay_ms(20);
+        
+        
         
     }
 
