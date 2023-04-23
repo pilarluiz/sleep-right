@@ -40,6 +40,7 @@ void pulse_sensor_init(void) {
     bpm_history_idx = 0; 
 }
 
+
 /*
     Function to get adc sample, process it, and return the BPM. 
 */

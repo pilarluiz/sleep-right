@@ -31,7 +31,7 @@ uint8_t sleep_stage()
     }
     average_bpm /= valid_readings;
 
-    uint8_t current_stage; 
+    uint8_t current_stage = DEEP_SLEEP; 
 
     if (average_bpm < 45) {
         current_stage = DEEP_SLEEP;

@@ -493,8 +493,10 @@ int main(void)
                     serial_stringout("SETALARM: Select Pressed\n");
                     lcd_debug_print("SETARM: SELECT ", 14);
                 }
-                state = SLEEP;                // will need to uncomment later
                 alarm_set=0;
+                uint8_t status = rtc_set(day, hours, minutes, seconds);
+                state = SLEEP;                // will need to uncomment later
+
             }
 
             // If right button pressed, increase alarm index
@@ -625,6 +627,12 @@ int main(void)
                 stage_change = 0; 
                 lcd_wakeup("GOOD MORNING :)", 15);
                 // Vibrate motor, etc
+
+                // Reset old variables
+                DEMO_DEEP_count = 0;
+                DEMO_LIGHT_count = 0;
+                DEMO_REM_count = 0;
+                pulse_sensor_init();
                 wake_up();
                 state = ALARM;
             }
@@ -726,6 +734,7 @@ int main(void)
                 while (!(PINB & (1 << SELECT_BUTTON))) {}
                 _delay_ms(10);
                 state = SETALARM;
+                alarm_set=1;
                 lcd_debug_print("                    ", 20);
             }
         }
