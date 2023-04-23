@@ -55,10 +55,10 @@ uint8_t seconds_tens;
 uint8_t seconds = 0;
 uint8_t minutes_ones;
 uint8_t minutes_tens;
-volatile uint8_t minutes;
+volatile uint8_t minutes = 0;
 uint8_t hours_ones;
 uint8_t hours_tens;
-volatile uint8_t hours;
+volatile uint8_t hours = 0;
 uint8_t day = 0;
 char* day_word;
 char* days[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -73,9 +73,10 @@ volatile uint8_t wakeup_day;         // not day of month but day of week 1-7, 1 
 volatile uint8_t alarm_index = 0;    // Used to differentiate between setting hours and minutes; 0 is hours 1 is minutes
 volatile uint8_t alarm_set = 0;
 
-// Timer2 variables
-volatile int timer2_interrupt_count = 0;
+// Watchdog Timer Variables
+volatile int wdt_interrupt_count = 0;
 volatile uint8_t sleep_debug = 0;
+volatile uint8_t wake_init = 0;
 
 // Rotary encoder variables
 volatile uint8_t changed = 0; 
@@ -87,32 +88,32 @@ uint8_t DEMO = 1;
 volatile int timer0_modulus;
 
 // TODO
-void timer_2_sleep_init() {
+// void timer_2_sleep_init() {
     
-    // reset interrupt counter
-    timer2_interrupt_count = 0;
-    // CTC mode
-    //TCCR2A |= ((1<<) | (1<<));
-    TCCR2B |= (1<<WGM22);
-    // Enable CTC interrupt
-    TIMSK2 |= (1<<OCIE2A);
-    // Trigger interrupt at maximum counter value
-    OCR2A = 255;
-    // Switching timer 2 to asynchronous for sleep mode; take some precautions (see p.201 on atmega datasheet)
-    TCNT2=0;
-    // global interrupts
-    sei();
-}
+//     // reset interrupt counter
+//     timer2_interrupt_count = 0;
+//     // CTC mode
+//     //TCCR2A |= ((1<<) | (1<<));
+//     TCCR2B |= (1<<WGM22);
+//     // Enable CTC interrupt
+//     TIMSK2 |= (1<<OCIE2A);
+//     // Trigger interrupt at maximum counter value
+//     OCR2A = 255;
+//     // Switching timer 2 to asynchronous for sleep mode; take some precautions (see p.201 on atmega datasheet)
+//     TCNT2=0;
+//     // global interrupts
+//     sei();
+// }
 
-void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
-    timer_2_sleep_init();
-    // Set prescalar for timer2, start timer
-    TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
-    // Idle sleep mode -> SM2:0 = 000
-    SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
-    // Sleep Enable pin set to 1
-    SMCR |= (1<<SE);
-}
+// void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
+//     timer_2_sleep_init();
+//     // Set prescalar for timer2, start timer
+//     TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
+//     // Idle sleep mode -> SM2:0 = 000
+//     SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
+//     // Sleep Enable pin set to 1
+//     SMCR |= (1<<SE);
+// }
 
 
 
@@ -212,15 +213,19 @@ void timer0_init() {
 }
 
 void vibrate_motor() {
-    TCCR0B |= (0b111 << CS00);  // 256 prescalar; turn on timer0
-    int cycle_counter = 0;
-    while(cycle_counter < 250) {     // vibrate motor for 25*200ms = 5s
-        cycle_counter++;
-        if(!(cycle_counter%10)){
-            timer0_modulus+=4;          
-            OCR0A = timer0_modulus;     // increase duty cycle of PWM
-        }
-    }
+    // TCCR0B |= (0b111 << CS00);  // 256 prescalar; turn on timer0
+    // int cycle_counter = 0;
+    // while(cycle_counter < 250) {     // vibrate motor for 25*200ms = 5s
+    //     cycle_counter++;
+    //     if(!(cycle_counter%10)){
+    //         timer0_modulus+=4;          
+    //         OCR0A = timer0_modulus;     // increase duty cycle of PWM
+    //     }
+    // }
+    PORTD |= (1<<PD5);
+    _delay_ms(5000);
+    PORTD &= ~(1<<PD5);
+
 }
 
 // void timer2_pwm_init(void)
@@ -232,7 +237,7 @@ void vibrate_motor() {
 // }
 
 // thanks to this dude: https://wolles-elektronikkiste.de/en/sleep-modes-and-power-management
-void watchdogSetup(void){
+void watchdog_init(void){
   cli();
   wdt_reset();
   WDTCSR |= (1<<WDCE) | (1<<WDE);
@@ -240,8 +245,30 @@ void watchdogSetup(void){
   sei();
 }
 
-// ISR(WDT_vect){//put in additional code here
-// }
+ISR(WDT_vect){//put in additional code here
+    // Toggle pin to track sleep mode interrupts
+    PORTD ^= (1<<PD3);
+    // watchdog goes off every 8s, for 5 minutes 5*60/8 = 37
+    wdt_interrupt_count++; 
+
+    if(!sleep_debug) {
+        // to check real time clock every five minutes counter must reach 5*60/8 = 37
+        //if(wdt_interrupt_count >= 37) {
+        if(wdt_interrupt_count >= 2) {      // check rtc every 16 seconds for debug
+            wdt_interrupt_count = 0;
+            // Check to see if we're at wakeup time or 1.5 hours from wakeup time
+            if ( check_if_at_wakeup() || check_if_one_cycle_from_wakeup()) {
+                state = WAKE; 
+                wake_init=1;
+                
+                // exit_sleepmode();
+            }
+        }
+    } else {
+        PORTD ^= (1<<PD3);
+    }
+
+}
 
 int main(void)
 {
@@ -253,7 +280,7 @@ int main(void)
 
     _delay_ms(2000);
     adc_init();
-    pulse_sensor_init();
+    // pulse_sensor_init();
     i2c_init(BDIV);
     encoder_init();
 
@@ -263,15 +290,24 @@ int main(void)
 
     // Variable Initializations
     state = SETCLOCK;
-    rtc_read();
+    //rtc_read();
     clock_index=0;
     wakeup_hours = 6; 
     wakeup_minutes = 0; 
     
+    // NEW: turn on LED brightness
+    uint8_t wbuf[3];
+    wbuf[0] = 0xFE;
+    wbuf[1] = 0x53;
+    wbuf[2] = 0x08;
+    uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+    _delay_ms(1);
+
     lcd_clear();
     _delay_ms(1000);
     lcd_splash_screen();
 
+    rtc_read();
     // Initial time printout
     lcd_alarm(wakeup_hours, wakeup_minutes);
     lcd_rtc(hours, minutes);
@@ -297,9 +333,9 @@ int main(void)
 
     //                  HAPTIC MOTOR
     DDRD |= (1<<PD5);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
-    timer0_init();
+    //timer0_init();
     //sei();
-    TCCR0B |= (0b010 << CS00);  // 256 prescalar; turn on timer0
+    //TCCR0B |= (0b010 << CS00);  // 256 prescalar; turn on timer0
 
 
     // timer2 pwm debug
@@ -307,41 +343,29 @@ int main(void)
     // timer2_init();
 
     //                  SLEEP MODE 
-    //sei();
-    // sleep_debug=1;
-    // DDRD |= (1<<PD3);
-    // enter_idle_sleep_mode();
 
-    // DDRD |= (1<<PD3);
-    // SMCR |= (1<<SE);
-    // SMCR &= ~((1<<SM2) | (1<<SM0));
-    // SMCR |= ((1<<SM1));
-    // Sleep Enable pin set to 1
+    
+    sleep_debug = 0;
+    DDRD |= (1<<PD3);
+    // wdt_reset();
+    // set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
+    // sleep_mode(); // sleep now!
 
-    // _delay_ms(2000);
-    // PORTD |= (1<<PD3);
-    //watchdogSetup();
-    //DDRD |= (1<<PD3);
-
+    //rtc_set(1, 12, 39, 1);
     while (1) {
+        // rtc_read();
+        // _delay_ms(1000);
         
 
-        /*
         // watchdog timer interrupt power down mode demo
-        PORTD |= (1<<PD3);  // equals (roughly) digitalWrite(7, HIGH);
-        _delay_ms(3500);
-        PORTD &= ~(1<<PD3); // equals (roughly) digitalWrite(7, LOW);
-        _delay_ms(3500);
-        wdt_reset();
-        set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
-        //  set_sleep_mode(SLEEP_MODE_PWR_SAVE); // choose power save mode
-        //  set_sleep_mode(SLEEP_MODE_STANDBY); // choose external standby power mode
-        //  set_sleep_mode(SLEEP_MODE_EXT_STANDBY); // choose external standby power mode
-        //  set_sleep_mode(SLEEP_MODE_IDLE); // did not work like this!
-        //  set_sleep_mode(SLEEP_MODE_ADC); // choose ADC noise reduction mode
-        //  sleep_bod_disable();  // optional brown-out detection switch off  
-        sleep_mode(); // sleep now!
-        */
+        // PORTD |= (1<<PD3);
+        // _delay_ms(3500);
+        // PORTD &= ~(1<<PD3);
+        // _delay_ms(3500);
+        // wdt_reset();
+        // set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
+        // sleep_mode(); // sleep now!
+        
         
         if (state == SETCLOCK) {
             // Toggling
@@ -368,7 +392,15 @@ int main(void)
                 // Set RTC
                 uint8_t status = rtc_set(day, hours, minutes, seconds);
                 state = SLEEP; 
+                watchdog_init();
                 alarm_set=1;
+                // Turn off LCD display backlight
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x53;
+                wbuf[2] = 0x01;
+                status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
             }
 
             // If right button pressed, increase clock index
@@ -407,6 +439,8 @@ int main(void)
             }
 
             if (changed) {
+                cli();
+                //serial_stringout("encoder changed");
                 changed=0;
                 if(increment) {
                     if(!alarm_set) {            // setting clock time       
@@ -470,6 +504,12 @@ int main(void)
                     }
                 }
                 lcd_rtc(hours, minutes);
+                // if(state_machine_debug) {
+                //     char buf[40];
+                //     snprintf(buf, 41, "CLOCK TIME: %02d:%02d ", hours, minutes);
+                //     serial_stringout(buf);
+                // }
+                sei();
             }
         } 
         
@@ -493,9 +533,18 @@ int main(void)
                     serial_stringout("SETALARM: Select Pressed\n");
                     lcd_debug_print("SETARM: SELECT ", 14);
                 }
-                alarm_set=0;
+                // set clock time
                 uint8_t status = rtc_set(day, hours, minutes, seconds);
                 state = SLEEP;                // will need to uncomment later
+                watchdog_init();
+                alarm_set=0;
+                // Turn off LCD display
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x53;
+                wbuf[2] = 0x01;
+                status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
 
             }
 
@@ -535,6 +584,8 @@ int main(void)
             }
 
             if (changed) {
+                cli();
+                //serial_stringout("encoder changed");
                 changed = 0;
                 if(increment) {
                     if(!alarm_set) {            // setting clock time       
@@ -598,24 +649,54 @@ int main(void)
                     }
                 }
                 lcd_alarm(wakeup_hours, wakeup_minutes);
+                sei();
+                // if(state_machine_debug) {
+                //     char buf[40];
+                //     snprintf(buf, 41, "CLOCK TIME: %02d:%02d ", wakeup_hours, wakeup_minutes);
+                //     serial_stringout(buf);
+                // }
             }
         } 
         
         else if (state == SLEEP) {
-            // TODO: Low power mode things
 
+            // Initialize power down sleep mode
+            wdt_reset();
+            set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
+            sleep_mode(); // sleep now!
             // Transition out of SLEEP mode
-            if ( check_if_at_wakeup() || check_if_one_cycle_from_wakeup()) {
-                state = WAKE; 
-                interrupt_init();
-                sleep_stage_init();
-                // exit_sleepmode();
-            }
+            // if ( check_if_at_wakeup() || check_if_one_cycle_from_wakeup()) {
+            //     state = WAKE; 
+            //     interrupt_init();
+            //     sleep_stage_init();
+            //     // exit_sleepmode();
+            // }
             
         } 
         
         else if (state == WAKE)
         {
+            if(wake_init) {
+                wake_init = 0;
+                // turn off watchdog?
+                WDTCSR &= ~((1<<WDCE) | (1<<WDE));
+                WDTCSR &= ~((1<<WDIE) | (1<<WDP3) | (1<<WDP0));  // 8s / interrupt, no system reset
+                // pulse sensor stuff
+                pulse_sensor_init();
+                interrupt_init();
+                sleep_stage_init();
+                // Turn on LCD display
+                uint8_t wbuf[3];
+                wbuf[0] = 0xFE;
+                wbuf[1] = 0x53;
+                wbuf[2] = 0x08;
+                uint8_t status = i2c_io(0x50, NULL, 0, wbuf, 3, NULL, 0);
+                _delay_ms(1);
+            }
+            if(state_machine_debug) {
+                serial_stringout("WAKE");
+                lcd_debug_print("WAKE", 4);
+            }
             uint8_t rtc_status = rtc_read();
             if(time_changed) {
                 time_changed = 0; 
@@ -628,14 +709,10 @@ int main(void)
                 lcd_wakeup("GOOD MORNING :)", 15);
                 // Vibrate motor, etc
 
-                // Reset old variables
-                DEMO_DEEP_count = 0;
-                DEMO_LIGHT_count = 0;
-                DEMO_REM_count = 0;
-                pulse_sensor_init();
                 wake_up();
                 state = ALARM;
             }
+
 
             // Print BPM
             if (saw_start_of_beat() && (state != ALARM)) {
@@ -685,11 +762,19 @@ int main(void)
                     lcd_bpm(DEMO_BPM);
                 }
 
-                uint8_t stage = sleep_stage();
-                lcd_stage(stage);
+                if(state != ALARM) {
+                    uint8_t stage = sleep_stage();
+                    lcd_stage(stage);
+                }
             }  
 
         } else if (state == ALARM) {
+            if(state_machine_debug) {
+                serial_stringout("ALARM");
+                lcd_debug_print("ALARM", 5);
+            }
+
+
             uint8_t rtc_status = rtc_read();
             if(time_changed) {
                 time_changed = 0; 
@@ -733,13 +818,21 @@ int main(void)
             if (!(PINB & (1 << SELECT_BUTTON))) {
                 while (!(PINB & (1 << SELECT_BUTTON))) {}
                 _delay_ms(10);
+                alarm_set=1;
                 state = SETALARM;
                 alarm_set=1;
                 lcd_debug_print("                    ", 20);
+                DEMO_DEEP_count = 0; 
+                DEMO_LIGHT_count = 0; 
+                DEMO_REM_count = 0; 
+                // Disable pulse senosr interrupts
+                disable_interrupt();
             }
         }
         
         _delay_ms(20);
+        
+        
         
     }
 

@@ -116,6 +116,8 @@ void lcd_rtc(uint8_t hour, uint8_t minutes){
         snprintf(buf, 41, "unsuccessful rtc print %2d \n", status);
         serial_stringout(buf);
     }
+
+     _delay_ms(1);
 }
 
 void lcd_alarm(uint8_t hour, uint8_t minutes){
