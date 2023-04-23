@@ -87,6 +87,11 @@ uint8_t DEMO = 1;
 // Timer0 variables
 volatile int timer0_modulus;
 
+// EEPROM 
+#define EEPROM_ADDR  200
+#define EEPROM_ALARM_HOUR EEPROM_ADDR 
+#define EEPROM_ALARM_MINUTES (EEPROM_ADDR + 1)
+
 // TODO
 // void timer_2_sleep_init() {
     
@@ -292,8 +297,16 @@ int main(void)
     state = SETCLOCK;
     //rtc_read();
     clock_index=0;
-    wakeup_hours = 6; 
-    wakeup_minutes = 0; 
+    wakeup_hours = eeprom_read_byte((void *) EEPROM_ALARM_HOUR); 
+    if((wakeup_hours > 23)||(wakeup_hours < 0)){
+        wakeup_hours = 6;
+        serial_stringout("invalid eeprom read hours")
+    }
+    wakeup_minutes = eeprom_read_byte((void *) EEPROM_ALARM_HOUR); 
+    if((wakeup_minutes > 59)||(wakeup_minutes < 0)){
+        wakeup_minutes = 0;
+        serial_stringout("invalid eeprom read min")
+    }
     
     // NEW: turn on LED brightness
     uint8_t wbuf[3];
@@ -391,6 +404,8 @@ int main(void)
                 
                 // Set RTC
                 uint8_t status = rtc_set(day, hours, minutes, seconds);
+                eeprom_update_byte((void *) EEPROM_ALARM_HOUR, wakeup_hours);
+                eeprom_update_byte((void *) EEPROM_ALARM_MINUTES, wakeup_minutes);
                 state = SLEEP; 
                 watchdog_init();
                 alarm_set=1;
@@ -535,6 +550,8 @@ int main(void)
                 }
                 // set clock time
                 uint8_t status = rtc_set(day, hours, minutes, seconds);
+                eeprom_update_byte((void *) EEPROM_ALARM_HOUR, wakeup_hours);
+                eeprom_update_byte((void *) EEPROM_ALARM_MINUTES, wakeup_minutes);
                 state = SLEEP;                // will need to uncomment later
                 watchdog_init();
                 alarm_set=0;
