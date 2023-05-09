@@ -1,5 +1,10 @@
-#include <avr/io.h>
+/*
+* EE459, Spring 2023 Capstone Project
+* Team 7 -- SleepRight
+* * Baran Cinbis, Evan Hashemi, Pilar Luiz
+*/
 
+#include <avr/io.h>
 #include "adc.h"
 
 #define ADC_MUX_BITS 0b1111

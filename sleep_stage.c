@@ -1,16 +1,10 @@
+/*
+* EE459, Spring 2023 Capstone Project
+* Team 7 -- SleepRight
+* * Baran Cinbis, Evan Hashemi, Pilar Luiz
+*/
+
 #include "sleep_stage.h"
-
-// TODO: Create tests for sleep stages
-
-// fucntion
-
-// for (i = 0; i < 30; ) 
-//      BPM = 30 // DEEP
-// for (i = 0 ; i < 30)
-//      BPM = 40 //
-// for (i = 0; i < 30) 
-//      BPM = 50
-
 
 void sleep_stage_init()
 {

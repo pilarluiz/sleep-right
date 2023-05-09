@@ -1,3 +1,9 @@
+/*
+* EE459, Spring 2023 Capstone Project
+* Team 7 -- SleepRight
+* * Baran Cinbis, Evan Hashemi, Pilar Luiz
+*/
+
 #include <avr/io.h>
 #include <util/delay.h>
 #include <stdio.h>
@@ -92,35 +98,6 @@ volatile int timer0_modulus;
 #define EEPROM_ALARM_HOUR EEPROM_ADDR 
 #define EEPROM_ALARM_MINUTES (EEPROM_ADDR + 1)
 
-// TODO
-// void timer_2_sleep_init() {
-    
-//     // reset interrupt counter
-//     timer2_interrupt_count = 0;
-//     // CTC mode
-//     //TCCR2A |= ((1<<) | (1<<));
-//     TCCR2B |= (1<<WGM22);
-//     // Enable CTC interrupt
-//     TIMSK2 |= (1<<OCIE2A);
-//     // Trigger interrupt at maximum counter value
-//     OCR2A = 255;
-//     // Switching timer 2 to asynchronous for sleep mode; take some precautions (see p.201 on atmega datasheet)
-//     TCNT2=0;
-//     // global interrupts
-//     sei();
-// }
-
-// void enter_idle_sleep_mode() {              // does order of sleep mode enable statements matter??
-//     timer_2_sleep_init();
-//     // Set prescalar for timer2, start timer
-//     TCCR2B |= ((1<<CS00) | (1<<CS02));      // prescalar 1024 -> slowest counting timer2 possible
-//     // Idle sleep mode -> SM2:0 = 000
-//     SMCR &= ~((1<<SM2) | (1<<SM1) | (1<<SM0));
-//     // Sleep Enable pin set to 1
-//     SMCR |= (1<<SE);
-// }
-
-
 
 uint8_t check_if_at_wakeup() {
     if((wakeup_hours == hours) && (wakeup_minutes == minutes)) {
@@ -129,23 +106,6 @@ uint8_t check_if_at_wakeup() {
         return 0;
     }
 }
-
-/*
-3 Cases for 1.5 hours away
-Format for 3 cases:
-Wakeup time range, begin to end
-Current time range,	begin to end
-
-CASE 1:
-9       to 	9:29		same day
-7:30	to	7:59
-CASE 2:
-9:30	to 	9:59		same day
-8:00 	to 	8:29
-CASE 3:
-00 		to 	1:29		day up by 1 (difference in day by 1 unless at last day of week)
-22:30	to 	23:59
-*/
 
 uint8_t check_if_one_cycle_from_wakeup() {
     int total_minutes = 60*hours+minutes;
@@ -181,33 +141,6 @@ void exit_sleepmode() {
 }
 
 
-// ISR(TIMER2_COMPA_vect) {
-//     // Disable sleep enable
-//     SMCR &= ~(1<<SE);
-
-//     // with prescalar of 1024, maximum time before timer2 counts up is 1/(16,000,000/1024) * (2^8-1) = 0.01632s
-//     timer2_interrupt_count++; 
-
-//     if(!sleep_debug) {
-//         // to check real time clock every five minutes counter must reach 5*60/0.01632 = 18,383 times
-//         if(timer2_interrupt_count >= 18383) {
-//             timer2_interrupt_count = 0;
-//             // Check to see if we're at wakeup time or 1.5 hours from wakeup time
-//             check_state();
-//         }
-//     } else {
-//          // test sleep mode
-//          // 5/0.01632 = 306
-//         if(timer2_interrupt_count >= 1000) {    //306
-//             timer2_interrupt_count = 0;
-//             // toggle motor
-//             PORTD ^= (1<<PD3);
-//         }
-//     }
-//     // Go back to sleep
-//     SMCR |= (1<<SE); 
-// }
-
 void timer0_init() {
     TCCR0A |= (0b11 << WGM00);  // Set for Fast PWM mode using OCR0A for the modulus
     TCCR0A |= (0b10 << COM0B0); // Set to turn OC0B (PB5) on at 0x00, off when TCNT0=OCR0A    
@@ -218,28 +151,11 @@ void timer0_init() {
 }
 
 void vibrate_motor() {
-    // TCCR0B |= (0b111 << CS00);  // 256 prescalar; turn on timer0
-    // int cycle_counter = 0;
-    // while(cycle_counter < 250) {     // vibrate motor for 25*200ms = 5s
-    //     cycle_counter++;
-    //     if(!(cycle_counter%10)){
-    //         timer0_modulus+=4;          
-    //         OCR0A = timer0_modulus;     // increase duty cycle of PWM
-    //     }
-    // }
     PORTD |= (1<<PD5);
     _delay_ms(5000);
     PORTD &= ~(1<<PD5);
 
 }
-
-// void timer2_pwm_init(void)
-// {
-//     TCCR2A |= (0b11 << WGM20);  // Fast PWM mode, modulus = 256
-//     TCCR2A |= (0b10 << COM2B0); // Turn D11 on at 0x00 and off at OCR2A
-//     OCR2A = 128;                // Initial pulse duty cycle of 50%
-//     TCCR2B |= (0b111 << CS20);  // Prescaler = 1024 for 16ms period
-// }
 
 // thanks to this dude: https://wolles-elektronikkiste.de/en/sleep-modes-and-power-management
 void watchdog_init(void){
@@ -258,7 +174,6 @@ ISR(WDT_vect){//put in additional code here
 
     if(!sleep_debug) {
         // to check real time clock every five minutes counter must reach 5*60/8 = 37
-        //if(wdt_interrupt_count >= 37) {
         if(wdt_interrupt_count >= 2) {      // check rtc every 16 seconds for debug
             wdt_interrupt_count = 0;
             // Check to see if we're at wakeup time or 1.5 hours from wakeup time
@@ -266,7 +181,6 @@ ISR(WDT_vect){//put in additional code here
                 state = WAKE; 
                 wake_init=1;
                 
-                // exit_sleepmode();
             }
         }
     } else {
@@ -343,43 +257,12 @@ int main(void)
     uint8_t DEMO_REM_count = 0; 
 
     
-
-    //                  HAPTIC MOTOR
     DDRD |= (1<<PD5);   // haptic motor output; PD6 OC0A (pin12) or PD5 OC0B (pin11) 
-    //timer0_init();
-    //sei();
-    //TCCR0B |= (0b010 << CS00);  // 256 prescalar; turn on timer0
 
-
-    // timer2 pwm debug
-    // DDRD |= (1<<PD3);
-    // timer2_init();
-
-    //                  SLEEP MODE 
-
-    
     sleep_debug = 0;
     DDRD |= (1<<PD3);
-    // wdt_reset();
-    // set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
-    // sleep_mode(); // sleep now!
 
-    //rtc_set(1, 12, 39, 1);
     while (1) {
-        // rtc_read();
-        // _delay_ms(1000);
-        
-
-        // watchdog timer interrupt power down mode demo
-        // PORTD |= (1<<PD3);
-        // _delay_ms(3500);
-        // PORTD &= ~(1<<PD3);
-        // _delay_ms(3500);
-        // wdt_reset();
-        // set_sleep_mode(SLEEP_MODE_PWR_DOWN); // choose power down mode
-        // sleep_mode(); // sleep now!
-        
-        
         if (state == SETCLOCK) {
             // Toggling
             if (!(PIND & (1 << TOGGLE_BUTTON))) {

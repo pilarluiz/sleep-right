@@ -1,3 +1,9 @@
+/*
+* EE459, Spring 2023 Capstone Project
+* Team 7 -- SleepRight
+* * Baran Cinbis, Evan Hashemi, Pilar Luiz
+*/
+
 void pulse_sensor_init(void);
 int get_pulse_reading(void);
 void read_next_sample(void);

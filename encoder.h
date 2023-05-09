@@ -1,3 +1,9 @@
+/*
+* EE459, Spring 2023 Capstone Project
+* Team 7 -- SleepRight
+* * Baran Cinbis, Evan Hashemi, Pilar Luiz
+*/
+
 #include <avr/interrupt.h>
 
 void encoder_init(void);
